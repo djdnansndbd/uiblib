@@ -1104,9 +1104,7 @@ function Library:CreateWindow(config)
         -- ==================== UPDATED MULTI-SELECT DROPDOWN ====================
         function TabObj:AddDropdown(arg1, arg2)
             local config = type(arg1) == "table" and arg1 or (arg2 or {})
-            if type(arg1) == "string" then
-                config.Title = config.Title or arg1
-            end
+            if type(arg1) == "string" then config.Title = config.Title or arg1 end
 
             local title = config.Title or "Dropdown"
             local options = config.Options or config.Values or {}
@@ -1116,13 +1114,10 @@ function Library:CreateWindow(config)
             local isOpen = false
             local multi = config.Multi or false
 
-            -- Selected state
             local selected = {}
             if multi then
                 if typeof(default) == "table" then
-                    for _, v in ipairs(default) do
-                        selected[v] = true
-                    end
+                    for _, v in ipairs(default) do selected[v] = true end
                 elseif default then
                     selected[default] = true
                 end
@@ -1204,66 +1199,51 @@ function Library:CreateWindow(config)
 
             local function updateLabel()
                 if not multi then
-                    SelLabel.Text = tostring(selected or "")
+                    SelLabel.Text = tostring(selected or "None")
                     return
                 end
-
                 local count = 0
                 local first = nil
                 for opt, _ in pairs(selected) do
                     count += 1
                     if not first then first = opt end
                 end
-
-                if count == 0 then
-                    SelLabel.Text = "None Selected"
-                elseif count == 1 then
-                    SelLabel.Text = tostring(first)
-                else
-                    SelLabel.Text = count .. " Selected"
-                end
+                if count == 0 then SelLabel.Text = "None Selected"
+                elseif count == 1 then SelLabel.Text = tostring(first)
+                else SelLabel.Text = count .. " Selected" end
             end
 
             local function buildOptions()
                 for _, c in pairs(OptionScroll:GetChildren()) do
                     if c:IsA("TextButton") then c:Destroy() end
                 end
-
                 OptionScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 28)
 
                 for _, opt in ipairs(options) do
+                    local isSelected = multi and (selected[opt] == true) or (opt == selected)
+
                     local ob = Create("TextButton", {
                         Parent = OptionScroll,
                         Size = UDim2.new(1, 0, 0, 28),
-                        BackgroundTransparency = multi and (selected[opt] and 0.85 or 1) or 1,
+                        BackgroundTransparency = isSelected and 0.85 or 1,
                         BackgroundColor3 = Theme.Accent,
                         Text = "  " .. tostring(opt),
-                        TextColor3 = (multi and selected[opt]) or (opt == selected) and Theme.Accent or Theme.TextMuted,
+                        TextColor3 = isSelected and Theme.Accent or Theme.TextMuted,
                         TextSize = 13,
                         Font = Enum.Font.Gotham,
                         TextXAlignment = Enum.TextXAlignment.Left
                     })
 
                     ob.MouseEnter:Connect(function()
-                        if not ((multi and selected[opt]) or (opt == selected)) then
-                            Tween(ob, {TextColor3 = Theme.Text}, 0.1)
-                        end
+                        if not isSelected then Tween(ob, {TextColor3 = Theme.Text}, 0.1) end
                     end)
-
                     ob.MouseLeave:Connect(function()
-                        local isSelected = multi and selected[opt] or (opt == selected)
-                        if not isSelected then
-                            Tween(ob, {TextColor3 = Theme.TextMuted}, 0.1)
-                        end
+                        if not isSelected then Tween(ob, {TextColor3 = Theme.TextMuted}, 0.1) end
                     end)
 
                     ob.MouseButton1Click:Connect(function()
                         if multi then
-                            if selected[opt] then
-                                selected[opt] = nil
-                            else
-                                selected[opt] = true
-                            end
+                            selected[opt] = not selected[opt]
                         else
                             selected = opt
                             isOpen = false
@@ -1275,9 +1255,7 @@ function Library:CreateWindow(config)
 
                         local value = multi and selected or selected
                         pcall(callback, value)
-                        if onChangedCallback then
-                            pcall(onChangedCallback, value)
-                        end
+                        if onChangedCallback then pcall(onChangedCallback, value) end
                         saveDefaultConfig()
                     end)
                 end
@@ -1295,15 +1273,11 @@ function Library:CreateWindow(config)
 
             local flagName = sanitizeFlagName(config.Flag or title)
             if flagName then
-                registerFlag(flagName, function()
-                    return multi and selected or selected
-                end, function(value)
+                registerFlag(flagName, function() return multi and selected or selected end, function(value)
                     if multi then
                         selected = {}
                         if typeof(value) == "table" then
-                            for _, v in ipairs(value) do
-                                selected[v] = true
-                            end
+                            for _, v in ipairs(value) do selected[v] = true end
                         end
                     else
                         selected = value
@@ -1318,9 +1292,7 @@ function Library:CreateWindow(config)
                     if multi then
                         selected = {}
                         if typeof(val) == "table" then
-                            for _, v in ipairs(val) do
-                                selected[v] = true
-                            end
+                            for _, v in ipairs(val) do selected[v] = true end
                         end
                     else
                         selected = val
@@ -1329,23 +1301,11 @@ function Library:CreateWindow(config)
                     buildOptions()
                     local value = multi and selected or selected
                     pcall(callback, value)
-                    if onChangedCallback then
-                        pcall(onChangedCallback, value)
-                    end
+                    if onChangedCallback then pcall(onChangedCallback, value) end
                 end,
-                Get = function(self)
-                    return multi and selected or selected
-                end,
-                Refresh = function(self, newOpts)
-                    options = newOpts
-                    buildOptions()
-                end,
-                OnChanged = function(self, fn)
-                    if type(fn) == "function" then
-                        onChangedCallback = fn
-                    end
-                    return self
-                end
+                Get = function(self) return multi and selected or selected end,
+                Refresh = function(self, newOpts) options = newOpts buildOptions() end,
+                OnChanged = function(self, fn) if type(fn) == "function" then onChangedCallback = fn end return self end
             }
         end
 
