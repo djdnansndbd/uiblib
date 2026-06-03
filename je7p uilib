@@ -927,7 +927,6 @@ function Library:CreateWindow(config)
             HitBox.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
-                    -- Only grow the size, never tween position here
                     Thumb.Size = UDim2.new(0, 18, 0, 18)
                     Thumb.Position = UDim2.new(currentPercent, -9, 0.5, -9)
                     setPercent(getPercent(input.Position.X))
@@ -954,15 +953,6 @@ function Library:CreateWindow(config)
             end)
 
             ValueBox.FocusLost:Connect(function(enterPressed)
-            if flagName then
-                registerFlag(flagName, function()
-                    return math.floor(min + (max - min) * currentPercent + 0.5)
-                end, function(value)
-                    local newPercent = math.clamp((value - min) / (max - min), 0, 1)
-                    setPercent(newPercent)
-                end)
-            end
-
                 local value = tonumber(ValueBox.Text)
                 if not value then
                     ValueBox.Text = tostring(math.floor(min + (max - min) * currentPercent + 0.5))
@@ -1111,234 +1101,256 @@ function Library:CreateWindow(config)
             end)
         end
 
-function TabObj:AddDropdown(arg1, arg2)
-    local config = type(arg1) == "table" and arg1 or (arg2 or {})
-    if type(arg1) == "string" then
-        config.Title = config.Title or arg1
-    end
-
-    local title = config.Title or "Dropdown"
-    local options = config.Options or config.Values or {}
-    local default = config.Default or {}
-    local callback = config.Callback or function() end
-    local onChangedCallback = nil
-    local isOpen = false
-    local multi = config.Multi or false  -- New: Enable multi-select
-
-    -- Ensure selected is always a table
-    local selected = {}
-    if multi then
-        if typeof(default) == "table" then
-            for _, v in ipairs(default) do
-                selected[v] = true
+        -- ==================== UPDATED MULTI-SELECT DROPDOWN ====================
+        function TabObj:AddDropdown(arg1, arg2)
+            local config = type(arg1) == "table" and arg1 or (arg2 or {})
+            if type(arg1) == "string" then
+                config.Title = config.Title or arg1
             end
-        elseif default then
-            selected[default] = true
-        end
-    else
-        selected = default  -- Single value (backward compatibility)
-    end
 
-    local DropFrame = Create("Frame", {
-        Parent = self.Page,
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundColor3 = Theme.ElementBg,
-        BorderSizePixel = 0,
-        ClipsDescendants = true
-    })
-    Create("UICorner", { Parent = DropFrame, CornerRadius = UDim.new(0, 6) })
-    Create("UIStroke", { Parent = DropFrame, Color = Theme.Outline, Thickness = 1 })
+            local title = config.Title or "Dropdown"
+            local options = config.Options or config.Values or {}
+            local default = config.Default or (config.Multi and {} or (options[1] or ""))
+            local callback = config.Callback or function() end
+            local onChangedCallback = nil
+            local isOpen = false
+            local multi = config.Multi or false
 
-    Create("TextLabel", {
-        Parent = DropFrame,
-        Size = UDim2.new(1, -160, 0, 40),
-        Position = UDim2.new(0, 15, 0, 0),
-        BackgroundTransparency = 1,
-        Text = title,
-        TextColor3 = Theme.Text,
-        TextSize = 14,
-        Font = Enum.Font.GothamMedium,
-        TextXAlignment = Enum.TextXAlignment.Left
-    })
+            -- Selected state
+            local selected = {}
+            if multi then
+                if typeof(default) == "table" then
+                    for _, v in ipairs(default) do
+                        selected[v] = true
+                    end
+                elseif default then
+                    selected[default] = true
+                end
+            else
+                selected = default
+            end
 
-    local SelBox = Create("Frame", {
-        Parent = DropFrame,
-        Size = UDim2.new(0, 140, 0, 24),
-        Position = UDim2.new(1, -155, 0, 8),
-        BackgroundColor3 = Theme.Outline
-    })
-    Create("UICorner", { Parent = SelBox, CornerRadius = UDim.new(0, 4) })
+            local DropFrame = Create("Frame", {
+                Parent = self.Page,
+                Size = UDim2.new(1, 0, 0, 40),
+                BackgroundColor3 = Theme.ElementBg,
+                BorderSizePixel = 0,
+                ClipsDescendants = true
+            })
+            Create("UICorner", { Parent = DropFrame, CornerRadius = UDim.new(0, 6) })
+            Create("UIStroke", { Parent = DropFrame, Color = Theme.Outline, Thickness = 1 })
 
-    local SelLabel = Create("TextLabel", {
-        Parent = SelBox,
-        Size = UDim2.new(1, -25, 1, 0),
-        Position = UDim2.new(0, 8, 0, 0),
-        BackgroundTransparency = 1,
-        Text = "",
-        TextColor3 = Theme.TextMuted,
-        TextSize = 12,
-        Font = Enum.Font.GothamMedium,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd
-    })
-
-    local Arrow = Create("TextLabel", {
-        Parent = SelBox,
-        Size = UDim2.new(0, 20, 1, 0),
-        Position = UDim2.new(1, -22, 0, 0),
-        BackgroundTransparency = 1,
-        Text = "v",
-        TextColor3 = Theme.TextMuted,
-        TextSize = 10,
-        Font = Enum.Font.GothamBold
-    })
-
-    local TogBtn = Create("TextButton", {
-        Parent = DropFrame,
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 1,
-        Text = ""
-    })
-
-    local OptionScroll = Create("ScrollingFrame", {
-        Parent = DropFrame,
-        Size = UDim2.new(1, -20, 1, -44),
-        Position = UDim2.new(0, 10, 0, 42),
-        BackgroundTransparency = 1,
-        ScrollBarThickness = 2,
-        ScrollBarImageColor3 = Theme.Outline,
-        CanvasSize = UDim2.new(0, 0, 0, #options * 28)
-    })
-    Create("UIListLayout", { Parent = OptionScroll, SortOrder = Enum.SortOrder.LayoutOrder })
-
-    local function updateLabel()
-        if not multi then
-            SelLabel.Text = tostring(selected or "")
-            return
-        end
-
-        local count = 0
-        local first = nil
-        for opt, _ in pairs(selected) do
-            count += 1
-            if not first then first = opt end
-        end
-
-        if count == 0 then
-            SelLabel.Text = "None Selected"
-        elseif count == 1 then
-            SelLabel.Text = tostring(first)
-        else
-            SelLabel.Text = count .. " Selected"
-        end
-    end
-
-    local function buildOptions()
-        for _, c in pairs(OptionScroll:GetChildren()) do
-            if c:IsA("TextButton") then c:Destroy() end
-        end
-
-        OptionScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 28)
-
-        for _, opt in ipairs(options) do
-            local ob = Create("TextButton", {
-                Parent = OptionScroll,
-                Size = UDim2.new(1, 0, 0, 28),
+            Create("TextLabel", {
+                Parent = DropFrame,
+                Size = UDim2.new(1, -160, 0, 40),
+                Position = UDim2.new(0, 15, 0, 0),
                 BackgroundTransparency = 1,
-                Text = "  " .. tostring(opt),
-                TextColor3 = Theme.TextMuted,
-                TextSize = 13,
-                Font = Enum.Font.Gotham,
+                Text = title,
+                TextColor3 = Theme.Text,
+                TextSize = 14,
+                Font = Enum.Font.GothamMedium,
                 TextXAlignment = Enum.TextXAlignment.Left
             })
 
-            -- Highlight if selected
-            if multi then
-                if selected[opt] then
-                    ob.TextColor3 = Theme.Accent
-                    ob.BackgroundTransparency = 0.85
-                    ob.BackgroundColor3 = Theme.Accent
-                end
-            else
-                if opt == selected then
-                    ob.TextColor3 = Theme.Accent
-                end
-            end
+            local SelBox = Create("Frame", {
+                Parent = DropFrame,
+                Size = UDim2.new(0, 140, 0, 24),
+                Position = UDim2.new(1, -155, 0, 8),
+                BackgroundColor3 = Theme.Outline
+            })
+            Create("UICorner", { Parent = SelBox, CornerRadius = UDim.new(0, 4) })
 
-            ob.MouseEnter:Connect(function()
-                if not (multi and selected[opt]) then
-                    Tween(ob, {TextColor3 = Theme.Text}, 0.1)
-                end
-            end)
+            local SelLabel = Create("TextLabel", {
+                Parent = SelBox,
+                Size = UDim2.new(1, -25, 1, 0),
+                Position = UDim2.new(0, 8, 0, 0),
+                BackgroundTransparency = 1,
+                Text = "",
+                TextColor3 = Theme.TextMuted,
+                TextSize = 12,
+                Font = Enum.Font.GothamMedium,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd
+            })
 
-            ob.MouseLeave:Connect(function()
-                local isSelected = multi and selected[opt] or (opt == selected)
-                if not isSelected then
-                    Tween(ob, {TextColor3 = Theme.TextMuted}, 0.1)
-                end
-            end)
+            local Arrow = Create("TextLabel", {
+                Parent = SelBox,
+                Size = UDim2.new(0, 20, 1, 0),
+                Position = UDim2.new(1, -22, 0, 0),
+                BackgroundTransparency = 1,
+                Text = "v",
+                TextColor3 = Theme.TextMuted,
+                TextSize = 10,
+                Font = Enum.Font.GothamBold
+            })
 
-            ob.MouseButton1Click:Connect(function()
-                if multi then
-                    -- Toggle selection
-                    if selected[opt] then
-                        selected[opt] = nil
-                    else
-                        selected[opt] = true
-                    end
+            local TogBtn = Create("TextButton", {
+                Parent = DropFrame,
+                Size = UDim2.new(1, 0, 0, 40),
+                BackgroundTransparency = 1,
+                Text = ""
+            })
+
+            local OptionScroll = Create("ScrollingFrame", {
+                Parent = DropFrame,
+                Size = UDim2.new(1, -20, 1, -44),
+                Position = UDim2.new(0, 10, 0, 42),
+                BackgroundTransparency = 1,
+                ScrollBarThickness = 2,
+                ScrollBarImageColor3 = Theme.Outline,
+                CanvasSize = UDim2.new(0, 0, 0, #options * 28)
+            })
+            Create("UIListLayout", { Parent = OptionScroll, SortOrder = Enum.SortOrder.LayoutOrder })
+
+            local function updateLabel()
+                if not multi then
+                    SelLabel.Text = tostring(selected or "")
+                    return
+                end
+
+                local count = 0
+                local first = nil
+                for opt, _ in pairs(selected) do
+                    count += 1
+                    if not first then first = opt end
+                end
+
+                if count == 0 then
+                    SelLabel.Text = "None Selected"
+                elseif count == 1 then
+                    SelLabel.Text = tostring(first)
                 else
-                    -- Single select (original behavior)
-                    selected = opt
-                    isOpen = false
-                    Tween(DropFrame, {Size = UDim2.new(1, 0, 0, 40)}, 0.2)
+                    SelLabel.Text = count .. " Selected"
                 end
-
-                updateLabel()
-                buildOptions()
-
-                -- Callbacks
-                local value = multi and selected or selected
-                pcall(callback, value)
-                if onChangedCallback then
-                    pcall(onChangedCallback, value)
-                end
-            end)
-        end
-    end
-
-    -- Toggle dropdown
-    TogBtn.MouseButton1Click:Connect(function()
-        isOpen = not isOpen
-        local targetSize = isOpen and UDim2.new(1, 0, 0, math.min(40 + #options * 28, 300)) or UDim2.new(1, 0, 0, 40)
-        Tween(DropFrame, {Size = targetSize}, 0.2)
-        Arrow.Text = isOpen and "^" or "v"
-    end)
-
-    updateLabel()
-    buildOptions()
-
-    -- Return object for further methods if needed
-    return {
-        Set = function(newValue)
-            if multi then
-                selected = {}
-                if typeof(newValue) == "table" then
-                    for _, v in ipairs(newValue) do
-                        selected[v] = true
-                    end
-                end
-            else
-                selected = newValue
             end
+
+            local function buildOptions()
+                for _, c in pairs(OptionScroll:GetChildren()) do
+                    if c:IsA("TextButton") then c:Destroy() end
+                end
+
+                OptionScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 28)
+
+                for _, opt in ipairs(options) do
+                    local ob = Create("TextButton", {
+                        Parent = OptionScroll,
+                        Size = UDim2.new(1, 0, 0, 28),
+                        BackgroundTransparency = multi and (selected[opt] and 0.85 or 1) or 1,
+                        BackgroundColor3 = Theme.Accent,
+                        Text = "  " .. tostring(opt),
+                        TextColor3 = (multi and selected[opt]) or (opt == selected) and Theme.Accent or Theme.TextMuted,
+                        TextSize = 13,
+                        Font = Enum.Font.Gotham,
+                        TextXAlignment = Enum.TextXAlignment.Left
+                    })
+
+                    ob.MouseEnter:Connect(function()
+                        if not ((multi and selected[opt]) or (opt == selected)) then
+                            Tween(ob, {TextColor3 = Theme.Text}, 0.1)
+                        end
+                    end)
+
+                    ob.MouseLeave:Connect(function()
+                        local isSelected = multi and selected[opt] or (opt == selected)
+                        if not isSelected then
+                            Tween(ob, {TextColor3 = Theme.TextMuted}, 0.1)
+                        end
+                    end)
+
+                    ob.MouseButton1Click:Connect(function()
+                        if multi then
+                            if selected[opt] then
+                                selected[opt] = nil
+                            else
+                                selected[opt] = true
+                            end
+                        else
+                            selected = opt
+                            isOpen = false
+                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, 40)}, 0.2)
+                        end
+
+                        updateLabel()
+                        buildOptions()
+
+                        local value = multi and selected or selected
+                        pcall(callback, value)
+                        if onChangedCallback then
+                            pcall(onChangedCallback, value)
+                        end
+                        saveDefaultConfig()
+                    end)
+                end
+            end
+
+            TogBtn.MouseButton1Click:Connect(function()
+                isOpen = not isOpen
+                local targetHeight = isOpen and math.min(40 + #options * 28, 320) or 40
+                Tween(DropFrame, {Size = UDim2.new(1, 0, 0, targetHeight)}, 0.2)
+                Arrow.Text = isOpen and "^" or "v"
+            end)
+
             updateLabel()
             buildOptions()
-            pcall(callback, multi and selected or selected)
-        end,
-        Get = function()
-            return multi and selected or selected
+
+            local flagName = sanitizeFlagName(config.Flag or title)
+            if flagName then
+                registerFlag(flagName, function()
+                    return multi and selected or selected
+                end, function(value)
+                    if multi then
+                        selected = {}
+                        if typeof(value) == "table" then
+                            for _, v in ipairs(value) do
+                                selected[v] = true
+                            end
+                        end
+                    else
+                        selected = value
+                    end
+                    updateLabel()
+                    buildOptions()
+                end)
+            end
+
+            return {
+                Set = function(self, val)
+                    if multi then
+                        selected = {}
+                        if typeof(val) == "table" then
+                            for _, v in ipairs(val) do
+                                selected[v] = true
+                            end
+                        end
+                    else
+                        selected = val
+                    end
+                    updateLabel()
+                    buildOptions()
+                    local value = multi and selected or selected
+                    pcall(callback, value)
+                    if onChangedCallback then
+                        pcall(onChangedCallback, value)
+                    end
+                end,
+                Get = function(self)
+                    return multi and selected or selected
+                end,
+                Refresh = function(self, newOpts)
+                    options = newOpts
+                    buildOptions()
+                end,
+                OnChanged = function(self, fn)
+                    if type(fn) == "function" then
+                        onChangedCallback = fn
+                    end
+                    return self
+                end
+            }
         end
-    }
-end
+
+        return TabObj
+    end
 
     function WindowObj:SelectTab(tabId)
         for _, tab in pairs(self.Tabs) do
@@ -1558,7 +1570,6 @@ end
 
 local function jsonParse(s)
     local out = {}
-    -- Simple key:value parser for flat objects
     for k, v in s:gmatch('"([^"]+)":([^,}]+)') do
         v = v:gsub('^%s*', ''):gsub('%s*$', '')
         if v == "true" then
@@ -1591,9 +1602,6 @@ function Library:SaveConfig(name)
         end
         writefile(path, jsonSerialize(data))
     end)
-    if not ok then
-        -- Silently fail in Studio / environments without file access
-    end
 end
 
 function Library:LoadConfig(name)
