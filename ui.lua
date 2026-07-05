@@ -1,6 +1,28 @@
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+
+-- Global cleanup for re-execution
+if _G.uiHub_Unload then
+    pcall(_G.uiHub_Unload)
+end
+
+local Connections = {}
+_G.uiHub_Unload = function()
+    for _, c in pairs(Connections) do
+        c:Disconnect()
+    end
+    table.clear(Connections)
+    local success, err = pcall(function()
+        if CoreGui:FindFirstChild("uiHub") then
+            CoreGui.uiHub:Destroy()
+        end
+    end)
+    if Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("uiHub") then
+        Players.LocalPlayer.PlayerGui.uiHub:Destroy()
+    end
+end
 
 local Library = {}
 
@@ -41,18 +63,18 @@ local function MakeDraggable(topbar, main)
         end
     end)
 
-    UserInputService.InputChanged:Connect(function(input)
+    table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - mousePos
             main.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
         end
-    end)
+    end))
 end
 
 -- [[ Library Initialization ]] --
 function Library:CreateWindow(title)
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "RedBlackGreyUI"
+    ScreenGui.Name = "uiHub"
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
     -- Safe execution environment check
@@ -499,21 +521,189 @@ function Library:CreateWindow(title)
                 end
             end)
 
-            UserInputService.InputChanged:Connect(function(input)
+            table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
                 if Dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                     Update(input)
                 end
-            end)
+            end))
 
-            UserInputService.InputEnded:Connect(function(input)
+            table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     Dragging = false
                 end
+            end))
+        end
+
+        -- [[ Create Player Dropdown ]] --
+        function TabMethods:CreatePlayerDropdown(dropdownText, callback)
+            local DropdownFrame = Instance.new("Frame")
+            DropdownFrame.Name = "Dropdown_" .. dropdownText
+            DropdownFrame.Parent = TabPage
+            DropdownFrame.BackgroundColor3 = Theme.ElementBackground
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 36)
+            DropdownFrame.ClipsDescendants = true
+
+            local DropdownCorner = Instance.new("UICorner")
+            DropdownCorner.CornerRadius = UDim.new(0, 4)
+            DropdownCorner.Parent = DropdownFrame
+            
+            local UIStroke = Instance.new("UIStroke")
+            UIStroke.Parent = DropdownFrame
+            UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            UIStroke.Color = Theme.SectionBackground
+            UIStroke.Thickness = 1
+
+            local DropdownButton = Instance.new("TextButton")
+            DropdownButton.Parent = DropdownFrame
+            DropdownButton.BackgroundColor3 = Theme.ElementBackground
+            DropdownButton.BackgroundTransparency = 1
+            DropdownButton.Size = UDim2.new(1, 0, 0, 36)
+            DropdownButton.Font = Enum.Font.GothamSemibold
+            DropdownButton.Text = ""
+            DropdownButton.AutoButtonColor = false
+
+            local DropdownLabel = Instance.new("TextLabel")
+            DropdownLabel.Parent = DropdownFrame
+            DropdownLabel.BackgroundTransparency = 1
+            DropdownLabel.Position = UDim2.new(0, 10, 0, 0)
+            DropdownLabel.Size = UDim2.new(1, -40, 0, 36)
+            DropdownLabel.Font = Enum.Font.GothamSemibold
+            DropdownLabel.Text = dropdownText .. " : None"
+            DropdownLabel.TextColor3 = Theme.Text
+            DropdownLabel.TextSize = 13
+            DropdownLabel.TextXAlignment = Enum.TextXAlignment.Left
+            
+            local ArrowLabel = Instance.new("TextLabel")
+            ArrowLabel.Parent = DropdownFrame
+            ArrowLabel.BackgroundTransparency = 1
+            ArrowLabel.Position = UDim2.new(1, -30, 0, 0)
+            ArrowLabel.Size = UDim2.new(0, 20, 0, 36)
+            ArrowLabel.Font = Enum.Font.GothamSemibold
+            ArrowLabel.Text = "+"
+            ArrowLabel.TextColor3 = Theme.Text
+            ArrowLabel.TextSize = 16
+
+            local ListContainer = Instance.new("ScrollingFrame")
+            ListContainer.Parent = DropdownFrame
+            ListContainer.BackgroundTransparency = 1
+            ListContainer.Position = UDim2.new(0, 0, 0, 40)
+            ListContainer.Size = UDim2.new(1, 0, 1, -40)
+            ListContainer.ScrollBarThickness = 2
+            ListContainer.ScrollBarImageColor3 = Theme.Accent
+            ListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+            
+            local ListLayout = Instance.new("UIListLayout")
+            ListLayout.Parent = ListContainer
+            ListLayout.SortOrder = Enum.SortOrder.Name
+            ListLayout.Padding = UDim.new(0, 4)
+
+            local ListPadding = Instance.new("UIPadding")
+            ListPadding.Parent = ListContainer
+            ListPadding.PaddingTop = UDim.new(0, 4)
+            ListPadding.PaddingBottom = UDim.new(0, 4)
+            ListPadding.PaddingLeft = UDim.new(0, 10)
+            ListPadding.PaddingRight = UDim.new(0, 10)
+
+            local isOpen = false
+            
+            DropdownButton.MouseButton1Click:Connect(function()
+                isOpen = not isOpen
+                ArrowLabel.Text = isOpen and "-" or "+"
+                local targetSize = isOpen and UDim2.new(1, 0, 0, 150) or UDim2.new(1, 0, 0, 36)
+                TweenService:Create(DropdownFrame, TweenInfo.new(0.2), {Size = targetSize}):Play()
             end)
+
+            local function UpdateCanvas()
+                ListContainer.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 8)
+            end
+            ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
+
+            local function AddPlayer(player)
+                if ListContainer:FindFirstChild(player.Name) then return end
+                
+                local PlayerBtn = Instance.new("TextButton")
+                PlayerBtn.Name = player.Name
+                PlayerBtn.Parent = ListContainer
+                PlayerBtn.BackgroundColor3 = Theme.SectionBackground
+                PlayerBtn.Size = UDim2.new(1, 0, 0, 30)
+                PlayerBtn.Text = ""
+                PlayerBtn.AutoButtonColor = false
+                
+                local BtnCorner = Instance.new("UICorner")
+                BtnCorner.CornerRadius = UDim.new(0, 4)
+                BtnCorner.Parent = PlayerBtn
+
+                local AvatarIcon = Instance.new("ImageLabel")
+                AvatarIcon.Parent = PlayerBtn
+                AvatarIcon.BackgroundTransparency = 1
+                AvatarIcon.Position = UDim2.new(0, 5, 0.5, -10)
+                AvatarIcon.Size = UDim2.new(0, 20, 0, 20)
+                
+                local AvatarCorner = Instance.new("UICorner")
+                AvatarCorner.CornerRadius = UDim.new(1, 0)
+                AvatarCorner.Parent = AvatarIcon
+                
+                task.spawn(function()
+                    local thumbType = Enum.ThumbnailType.HeadShot
+                    local thumbSize = Enum.ThumbnailSize.Size48x48
+                    local success, content, isReady = pcall(function()
+                        return Players:GetUserThumbnailAsync(player.UserId, thumbType, thumbSize)
+                    end)
+                    if success and isReady then
+                        AvatarIcon.Image = content
+                    end
+                end)
+
+                local NameLabel = Instance.new("TextLabel")
+                NameLabel.Parent = PlayerBtn
+                NameLabel.BackgroundTransparency = 1
+                NameLabel.Position = UDim2.new(0, 35, 0, 0)
+                NameLabel.Size = UDim2.new(1, -40, 1, 0)
+                NameLabel.Font = Enum.Font.Gotham
+                NameLabel.Text = player.Name
+                NameLabel.TextColor3 = Theme.Text
+                NameLabel.TextSize = 12
+                NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                
+                PlayerBtn.MouseEnter:Connect(function()
+                    TweenService:Create(PlayerBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.HoverElement}):Play()
+                end)
+                PlayerBtn.MouseLeave:Connect(function()
+                    TweenService:Create(PlayerBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.SectionBackground}):Play()
+                end)
+                
+                PlayerBtn.MouseButton1Click:Connect(function()
+                    DropdownLabel.Text = dropdownText .. " : " .. player.Name
+                    isOpen = false
+                    ArrowLabel.Text = "+"
+                    TweenService:Create(DropdownFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 36)}):Play()
+                    if callback then pcall(callback, player.Name) end
+                end)
+            end
+
+            local function RemovePlayer(player)
+                local btn = ListContainer:FindFirstChild(player.Name)
+                if btn then
+                    btn:Destroy()
+                end
+            end
+
+            for _, v in ipairs(Players:GetPlayers()) do
+                AddPlayer(v)
+            end
+
+            table.insert(Connections, Players.PlayerAdded:Connect(AddPlayer))
+            table.insert(Connections, Players.PlayerRemoving:Connect(RemovePlayer))
         end
 
         return TabMethods
     end
+
+    table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
+            ScreenGui.Enabled = not ScreenGui.Enabled
+        end
+    end))
 
     return Window
 end
