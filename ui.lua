@@ -177,6 +177,102 @@ function Library:CreateWindow(title)
     ContentContainer.Position = UDim2.new(0, 145, 0, 42)
     ContentContainer.Size = UDim2.new(1, -145, 1, -42)
 
+    -- Notifications Container (Bottom Right)
+    local NotifContainer = Instance.new("Frame")
+    NotifContainer.Name = "NotifContainer"
+    NotifContainer.Parent = ScreenGui
+    NotifContainer.BackgroundTransparency = 1
+    NotifContainer.Position = UDim2.new(1, -270, 0, 0)
+    NotifContainer.Size = UDim2.new(0, 250, 1, -20)
+    
+    local NotifList = Instance.new("UIListLayout")
+    NotifList.Parent = NotifContainer
+    NotifList.SortOrder = Enum.SortOrder.LayoutOrder
+    NotifList.Padding = UDim.new(0, 10)
+    NotifList.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    NotifList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+
+    -- [[ Global Notify Function ]] --
+    function Library:Notify(options)
+        local title = options.Title or "Notification"
+        local text = options.Text or "..."
+        local duration = options.Duration or 3
+
+        local NotifFrame = Instance.new("Frame")
+        NotifFrame.Name = "Notif_" .. title
+        NotifFrame.Parent = NotifContainer
+        NotifFrame.BackgroundColor3 = Theme.SectionBackground
+        NotifFrame.Size = UDim2.new(0, 250, 0, 60)
+        -- Start off-screen to the right
+        NotifFrame.Position = UDim2.new(1, 10, 0, 0)
+
+        local NotifCorner = Instance.new("UICorner")
+        NotifCorner.CornerRadius = UDim.new(0, 6)
+        NotifCorner.Parent = NotifFrame
+        
+        local UIStroke = Instance.new("UIStroke")
+        UIStroke.Parent = NotifFrame
+        UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        UIStroke.Color = Theme.ElementBackground
+        UIStroke.Thickness = 1
+
+        local AccentStripe = Instance.new("Frame")
+        AccentStripe.Name = "Accent"
+        AccentStripe.Parent = NotifFrame
+        AccentStripe.BackgroundColor3 = Theme.Accent
+        AccentStripe.Size = UDim2.new(0, 3, 1, 0)
+        AccentStripe.BorderSizePixel = 0
+        
+        local AccentCorner = Instance.new("UICorner")
+        AccentCorner.CornerRadius = UDim.new(0, 6)
+        AccentCorner.Parent = AccentStripe
+        
+        -- Hide right corners of accent stripe
+        local AccentHide = Instance.new("Frame")
+        AccentHide.Parent = AccentStripe
+        AccentHide.BackgroundColor3 = Theme.Accent
+        AccentHide.Position = UDim2.new(1, -1, 0, 0)
+        AccentHide.Size = UDim2.new(0, 1, 1, 0)
+        AccentHide.BorderSizePixel = 0
+
+        local TitleLabel = Instance.new("TextLabel")
+        TitleLabel.Parent = NotifFrame
+        TitleLabel.BackgroundTransparency = 1
+        TitleLabel.Position = UDim2.new(0, 15, 0, 5)
+        TitleLabel.Size = UDim2.new(1, -20, 0, 20)
+        TitleLabel.Font = Enum.Font.GothamBold
+        TitleLabel.Text = title
+        TitleLabel.TextColor3 = Theme.Text
+        TitleLabel.TextSize = 14
+        TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Parent = NotifFrame
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Position = UDim2.new(0, 15, 0, 25)
+        TextLabel.Size = UDim2.new(1, -20, 1, -30)
+        TextLabel.Font = Enum.Font.Gotham
+        TextLabel.Text = text
+        TextLabel.TextColor3 = Theme.TextDark
+        TextLabel.TextSize = 12
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.TextYAlignment = Enum.TextYAlignment.Top
+        TextLabel.TextWrapped = true
+
+        -- Animation Logic
+        local slideIn = TweenService:Create(NotifFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+        local slideOut = TweenService:Create(NotifFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1, 10, 0, 0)})
+
+        slideIn:Play()
+
+        task.spawn(function()
+            task.wait(duration)
+            slideOut:Play()
+            slideOut.Completed:Wait()
+            NotifFrame:Destroy()
+        end)
+    end
+
     local Window = {
         CurrentTab = nil
     }
