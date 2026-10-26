@@ -1,5 +1,5 @@
 --[[
-	StardustUI v7 — User Profile, Star Close Animation, Smooth Hovers
+	StardustUI v8 — Fixed TextButton errors, Fixed long usernames, Clean hover styles
 ]]
 
 local StardustUI = {}
@@ -127,15 +127,17 @@ local function ripple(parent, x, y)
 	task.delay(0.45, function() r:Destroy() end)
 end
 
--- Smooth hover effect for elements
-local function applyHoverEffect(btn, isSelectedFunc, baseColor, hoverColor, baseTr, hoverTr)
+-- Clean, subtle hover (Light Gray + Brighter Border)
+local function applyHoverEffect(btn, isSelectedFunc, baseColor, hoverColor, baseTr, hoverTr, strokeObj, baseStrTr, hoverStrTr)
 	btn.MouseEnter:Connect(function()
 		if isSelectedFunc and isSelectedFunc() then return end
-		tween(btn, { BackgroundColor3 = hoverColor, BackgroundTransparency = hoverTr }, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
+		tween(btn, { BackgroundColor3 = hoverColor, BackgroundTransparency = hoverTr }, THEME.AnimFast)
+		if strokeObj then tween(strokeObj, { Transparency = hoverStrTr }, THEME.AnimFast) end
 	end)
 	btn.MouseLeave:Connect(function()
 		if isSelectedFunc and isSelectedFunc() then return end
-		tween(btn, { BackgroundColor3 = baseColor, BackgroundTransparency = baseTr }, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out))
+		tween(btn, { BackgroundColor3 = baseColor, BackgroundTransparency = baseTr }, THEME.AnimFast)
+		if strokeObj then tween(strokeObj, { Transparency = baseStrTr }, THEME.AnimFast) end
 	end)
 end
 
@@ -537,13 +539,12 @@ function Window:_build()
 		BorderSizePixel = 0, ZIndex = 13,
 	}, tabListBg)
 	make("Frame", {
-		Size = UDim2.new(0, 1, 1, -80), -- Stops above user profile
+		Size = UDim2.new(0, 1, 1, -80), 
 		Position = UDim2.new(1, -1, 0, 8),
 		BackgroundColor3 = WHITE, BackgroundTransparency = 0.7,
 		BorderSizePixel = 0, ZIndex = 13,
 	}, tabListBg)
 
-	-- Tab Scroller (sized to leave room for user profile at bottom)
 	local tabScroll = make("ScrollingFrame", {
 		Name = "TabScroll",
 		Position = UDim2.fromOffset(0, 0),
@@ -579,7 +580,6 @@ function Window:_build()
 		ZIndex = 13,
 	}, tabListBg)
 	corner(userProfile)
-	-- Square top corners
 	make("Frame", {
 		Size = UDim2.new(1, 0, 0, 10),
 		Position = UDim2.new(0, 0, 0, 0),
@@ -613,12 +613,12 @@ function Window:_build()
 		Position = UDim2.fromOffset(46, 10),
 		Text = player.DisplayName,
 		Font = THEME.FontBold, TextSize = 13,
+		TextTruncate = Enum.TextTruncate.AtEnd, -- Prevents long names from breaking the UI
 		ZIndex = 15,
 	}, userProfile)
 	
-	-- Underline for username
 	make("Frame", {
-		Size = UDim2.new(0, nameLbl.TextBounds.X, 0, 1),
+		Size = UDim2.new(1, -50, 0, 1),
 		Position = UDim2.new(0, 46, 0, 25),
 		BackgroundColor3 = THEME.TextDim,
 		BorderSizePixel = 0,
@@ -634,14 +634,14 @@ function Window:_build()
 		ZIndex = 15,
 	}, userProfile)
 
-	-- Stats update loop (Every 0.5s)
 	local lastPing = 0
 	task.spawn(function()
 		while not self.Destroyed do
 			local time = os.date("%I:%M%p"):gsub("^0", ""):lower()
 			local fps = math.floor(1 / math.max(RunService.RenderStepped:Wait(), 0.001))
 			if math.random() < 0.2 then
-				lastPing = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) 
+				local pingVal = Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+				if pingVal then lastPing = math.floor(pingVal) end
 			end
 			statsLbl.Text = string.format("%s\nfps: %d | ping: %dms", time, fps, lastPing)
 			task.wait(0.5)
@@ -863,7 +863,6 @@ function Window:Toggle(v)
 	self.Visible = targetVisible
 
 	if self.Visible then
-		-- Star Open Animation
 		self.Frame.Visible = true
 		self.Frame.Size = UDim2.fromOffset(10, 10)
 		self.Frame.BackgroundTransparency = 1
@@ -875,7 +874,6 @@ function Window:Toggle(v)
 			Rotation = 0
 		}, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out))
 	else
-		-- Star Close Animation
 		tween(self.Frame, {
 			Size = UDim2.fromOffset(0, 0),
 			BackgroundTransparency = 1,
@@ -913,7 +911,6 @@ function Window:Tab(name)
 	tab.Window = self
 	tab.Sections = {}
 
-	-- Cleaner Tab Layout
 	local btn = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
@@ -923,7 +920,7 @@ function Window:Tab(name)
 		ZIndex = 15,
 	}, self.TabScroll)
 	corner(btn, UDim.new(0, 6))
-	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.8)
+	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.85)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12) }, btn)
 	local txt = label({
 		Size = UDim2.fromScale(1, 1),
@@ -970,8 +967,7 @@ function Window:Tab(name)
 
 	btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
 	
-	-- Hover animation for tab
-	applyHoverEffect(btn, function() return self.CurrentTab == tab end, THEME.Element, THEME.Element, 0.7, 0.3)
+	applyHoverEffect(btn, function() return self.CurrentTab == tab end, THEME.Element, Color3.fromRGB(85, 85, 98), 0.7, 0.5, tab.ButtonStroke, 0.85, 0.4)
 	btn.MouseEnter:Connect(function()
 		if self.CurrentTab ~= tab then tween(txt, { TextColor3 = WHITE }, THEME.AnimFast) end
 	end)
@@ -990,13 +986,13 @@ function Window:SelectTab(tab)
 		self.CurrentTab.Holder.Visible = false
 		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
 		tween(self.CurrentTab.ButtonText, { TextColor3 = THEME.TextDim })
-		self.CurrentTab.ButtonStroke.Transparency = 0.8
+		tween(self.CurrentTab.ButtonStroke, { Transparency = 0.85 })
 	end
 	self.CurrentTab = tab
 	tab.Holder.Visible = true
-	tween(tab.Button, { BackgroundColor3 = WHITE, BackgroundTransparency = 0.1 })
-	tween(tab.ButtonText, { TextColor3 = BLACK })
-	tab.ButtonStroke.Transparency = 0.15
+	tween(tab.Button, { BackgroundColor3 = Color3.fromRGB(100, 100, 115), BackgroundTransparency = 0.4 })
+	tween(tab.ButtonText, { TextColor3 = WHITE })
+	tween(tab.ButtonStroke, { Transparency = 0.15 })
 end
 
 ---------------------------------------------------------------------
@@ -1071,17 +1067,18 @@ function Section:Button(text, callback)
 		ZIndex = 15,
 	}, self.Frame)
 	corner(btn, UDim.new(0, 6))
-	animatedStroke(btn, 1.2, 0.55)
+	local st = animatedStroke(btn, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, btn)
+	
+	-- We use a TextLabel instead of the TextButton's text property
 	local txt = label({
 		Size = UDim2.new(1, 0, 1, 0),
 		Text = text, TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 13, ZIndex = 16,
 	}, btn)
 	
-	applyHoverEffect(btn, nil, THEME.Element, WHITE, THEME.TrElement, 0.1)
-	btn.MouseEnter:Connect(function() tween(txt, { TextColor3 = BLACK }) end)
-	btn.MouseLeave:Connect(function() tween(txt, { TextColor3 = WHITE }) end)
+	applyHoverEffect(btn, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
+	btn.MouseEnter:Connect(function() tween(txt, { TextColor3 = WHITE }) end)
 	
 	btn.MouseButton1Click:Connect(function()
 		ripple(btn, btn.AbsoluteSize.X / 2, btn.AbsoluteSize.Y / 2)
@@ -1110,7 +1107,7 @@ function Section:Toggle(text, default, callback)
 		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	animatedStroke(holder, 1.2, 0.55)
+	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
 	label({ Size = UDim2.new(1, -50, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 
@@ -1132,8 +1129,7 @@ function Section:Toggle(text, default, callback)
 	}, btn)
 	corner(knob, UDim.new(1, 0))
 
-	-- Add hover effect to the toggle container
-	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
+	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 
 	local function apply(v, fire)
 		state = v
@@ -1173,7 +1169,7 @@ function Section:Slider(text, min, max, default, callback)
 		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	animatedStroke(holder, 1.2, 0.55)
+	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, holder)
 	label({ Size = UDim2.new(1, -60, 0, 16), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 	local valLabel = label({
@@ -1204,8 +1200,7 @@ function Section:Slider(text, min, max, default, callback)
 	corner(knob, UDim.new(1, 0))
 	stroke(knob, WHITE, 2, 0.6)
 	
-	-- Add hover effect to slider container
-	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
+	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 
 	local dragging = false
 	local function updateFromX(x)
@@ -1259,7 +1254,7 @@ function Section:Textbox(text, default, callback)
 		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	animatedStroke(holder, 1.2, 0.55)
+	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
 	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 	local box = make("TextBox", {
@@ -1277,7 +1272,7 @@ function Section:Textbox(text, default, callback)
 	stroke(box, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, box)
 	
-	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
+	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	
 	box.Focused:Connect(function() tween(box, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK }) end)
 	box.FocusLost:Connect(function(enter)
@@ -1291,7 +1286,6 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- REDESIGNED DROPDOWN (Pushes everything below it down. No overlap, no weird box icon)
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
@@ -1304,18 +1298,17 @@ function Section:Dropdown(text, options, default, callback)
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ClipsDescendants = true, -- Clips the list so it emerges from inside
+		ClipsDescendants = true,
 		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	animatedStroke(holder, 1.2, 0.55)
+	local st = animatedStroke(holder, 1.2, 0.55)
 	
 	make("UIListLayout", {
 		Padding = UDim.new(0, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, holder)
 
-	-- The clickable header
 	local header = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundTransparency = 1,
@@ -1337,7 +1330,6 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, header)
 
-	-- A clean thin white underline indicator instead of the box
 	local indicator = make("Frame", {
 		Size = UDim2.new(0, 16, 0, 2),
 		Position = UDim2.new(1, 0, 1, -6),
@@ -1349,7 +1341,6 @@ function Section:Dropdown(text, options, default, callback)
 	}, header)
 	corner(indicator, UDim.new(1, 0))
 
-	-- The list that appears below
 	local list = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
 		BackgroundTransparency = 1,
@@ -1393,7 +1384,8 @@ function Section:Dropdown(text, options, default, callback)
 	end
 	rebuild()
 
-	applyHoverEffect(header, nil, WHITE, WHITE, 1, 1) -- Fake hover, just to allow the visual
+	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
+	
 	header.MouseEnter:Connect(function() 
 		if not open then tween(indicator, { BackgroundTransparency = 0.1 }) end
 	end)
@@ -1434,7 +1426,7 @@ function Section:Keybind(text, default, callback)
 		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	animatedStroke(holder, 1.2, 0.55)
+	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
 	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 	local btn = make("TextButton", {
@@ -1450,7 +1442,7 @@ function Section:Keybind(text, default, callback)
 	corner(btn, UDim.new(0, 5))
 	stroke(btn, WHITE, 1, 0.7)
 	
-	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
+	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	
 	btn.MouseButton1Click:Connect(function()
 		listening = true
