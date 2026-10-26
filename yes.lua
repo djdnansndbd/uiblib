@@ -219,14 +219,22 @@ local function createNightSky(parent)
 	local stars = {}
 	local function addStars(count, size, speed, baseTr, z)
 		for _ = 1, count do
-			local f = make("Frame", {
-				Size = UDim2.fromOffset(size, size),
+			local f = make("TextLabel", {
+				Size = UDim2.fromOffset(7 + size * 3, 7 + size * 3),
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundColor3 = WHITE,
+				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
+				Font = Enum.Font.SourceSansBold,
+				Text = "★",
+				TextColor3 = WHITE,
+				TextSize = 8 + size * 4,
+				TextTransparency = baseTr,
+				TextStrokeColor3 = WHITE,
+				TextStrokeTransparency = 0.8,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextYAlignment = Enum.TextYAlignment.Center,
 				ZIndex = z,
 			}, layers[z - 1])
-			if size >= 2 then corner(f, UDim.new(1, 0)) end
 			stars[#stars + 1] = {
 				f = f,
 				x = rng:NextNumber(), y = rng:NextNumber(),
@@ -293,14 +301,14 @@ local function createNightSky(parent)
 	end
 
 	local shooters = {}
-	local nextShooter = 0.4
+	local nextShooter = 0.25
 	local function spawnShooter()
 		local W = sky.AbsoluteSize.X
-		if W < 50 then return end
-		local len = rng:NextNumber(70, 130)
-		local ang = math.rad(rng:NextNumber(18, 40))
-		local dirx = rng:NextNumber() < 0.5 and 1 or -1
-		local dx, dy = math.cos(ang) * dirx, math.sin(ang)
+		local H = sky.AbsoluteSize.Y
+		if W < 50 or H < 30 then return end
+		local len = rng:NextNumber(55, 110)
+		local ang = rng:NextNumber(0, math.pi * 2)
+		local dx, dy = math.cos(ang), math.sin(ang)
 		local rot = math.deg(math.atan2(dy, dx))
 		local tail = make("Frame", {
 			Size = UDim2.fromOffset(len, 1),
@@ -326,10 +334,11 @@ local function createNightSky(parent)
 		make("UIStroke", { Color = WHITE, Thickness = 4, Transparency = 0.6 }, head)
 		shooters[#shooters + 1] = {
 			tail = tail, head = head,
-			x = rng:NextNumber(0.1, 0.9) * W, y = -40,
+			x = rng:NextNumber(0.05, 0.95) * W,
+			y = rng:NextNumber(0.05, 0.95) * H,
 			dx = dx, dy = dy,
-			speed = rng:NextNumber(450, 700),
-			age = 0, life = rng:NextNumber(1.0, 1.8),
+			speed = rng:NextNumber(280, 520),
+			age = 0, life = rng:NextNumber(0.7, 1.3),
 		}
 	end
 
@@ -353,7 +362,7 @@ local function createNightSky(parent)
 			local sh = math.sin(elapsed * s.tw + s.phase)
 			sh = sh > 0 and (sh ^ 0.5) or (sh * 0.35)
 			local tw = 0.5 + 0.5 * sh
-			s.f.BackgroundTransparency = s.base + (1 - s.base) * 0.7 * tw
+			s.f.TextTransparency = s.base + (1 - s.base) * 0.7 * tw
 		end
 
 		for _, sp in ipairs(sparkles) do
@@ -374,9 +383,9 @@ local function createNightSky(parent)
 			sp.c.Rotation = math.deg(math.atan2(sp.vy, sp.vx)) + elapsed * 6
 		end
 
-		if elapsed >= nextShooter and #shooters < 3 then
+		if elapsed >= nextShooter and #shooters < 5 then
 			spawnShooter()
-			nextShooter = elapsed + rng:NextNumber(1.2, 2.8)
+			nextShooter = elapsed + rng:NextNumber(0.35, 0.9)
 		end
 
 		for i = #shooters, 1, -1 do
@@ -392,7 +401,7 @@ local function createNightSky(parent)
 			local fade = math.min(1, s.age / 0.15) * math.min(1, (s.life - s.age) / 0.3)
 			s.tail.BackgroundTransparency = 1 - fade
 			s.head.BackgroundTransparency = 1 - fade
-			if s.y > H + 60 or s.x < -120 or s.x > W + 120 or s.age >= s.life then
+			if s.y < -120 or s.y > H + 120 or s.x < -120 or s.x > W + 120 or s.age >= s.life then
 				s.tail:Destroy(); s.head:Destroy()
 				table.remove(shooters, i)
 			end
