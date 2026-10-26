@@ -1,5 +1,5 @@
 --[[
-	StardustUI v4 — transparent sections + starfield everywhere + fixed quit dialog
+	StardustUI v5 — Floating Dropdowns, Super Transparent, Visible Border
 ]]
 
 local StardustUI = {}
@@ -34,11 +34,11 @@ local THEME = {
 	WinH      = 460,
 	TabW      = 140,
 
-	-- transparency presets (higher = more see-through)
-	TrWindow  = 0.15,   -- window base — slightly see-through
-	TrPanel   = 0.35,   -- top bar + sidebar
-	TrSection = 0.55,   -- section backgrounds (very see-through)
-	TrElement = 0.65,   -- row backgrounds inside sections
+	-- VERY transparent so the star animation shines through
+	TrWindow  = 0.35,   
+	TrPanel   = 0.55,   
+	TrSection = 0.75,   
+	TrElement = 0.85,   
 }
 
 local WHITE = Color3.fromRGB(255, 255, 255)
@@ -74,16 +74,15 @@ end
 
 -- Brighter, longer sweeping gradient stroke
 local function animatedStroke(parent, thickness, baseTransparency)
-	local st = stroke(parent, THEME.Stroke, thickness or 1.6, baseTransparency or 0.35)
+	local st = stroke(parent, THEME.Stroke, thickness or 1.6, baseTransparency or 0.1)
 	local grad = make("UIGradient", {
 		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.95),
-			NumberSequenceKeypoint.new(0.25, 0.9),
-			NumberSequenceKeypoint.new(0.4, 0.2),   -- long bright band begins
-			NumberSequenceKeypoint.new(0.5, 0),     -- peak brightness
-			NumberSequenceKeypoint.new(0.6, 0.2),   -- long bright band ends
-			NumberSequenceKeypoint.new(0.75, 0.9),
-			NumberSequenceKeypoint.new(1, 0.95),
+			NumberSequenceKeypoint.new(0, 0.85),
+			NumberSequenceKeypoint.new(0.3, 0.8),
+			NumberSequenceKeypoint.new(0.45, 0),    
+			NumberSequenceKeypoint.new(0.55, 0),    
+			NumberSequenceKeypoint.new(0.7, 0.8),
+			NumberSequenceKeypoint.new(1, 0.85),
 		}),
 	}, st)
 	if StardustUI._strokes then
@@ -100,6 +99,7 @@ local function label(props, parent)
 		TextColor3 = THEME.Text,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 2,
 	}
 	for k, v in pairs(props) do base[k] = v end
 	return make("TextLabel", base, parent)
@@ -128,7 +128,7 @@ local function ripple(parent, x, y)
 end
 
 ---------------------------------------------------------------------
--- NIGHT SKY (reusable — builds into any parent frame)
+-- NIGHT SKY
 ---------------------------------------------------------------------
 local function createNightSky(parent)
 	local sky = make("Frame", {
@@ -404,6 +404,7 @@ function StardustUI.new(opts)
 end
 
 function Window:_build()
+	-- MAIN WINDOW
 	local win = make("Frame", {
 		Name = "Window_" .. self.Title,
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -413,26 +414,37 @@ function Window:_build()
 		BackgroundTransparency = THEME.TrWindow,
 		BorderSizePixel = 0,
 		Active = true,
-		ClipsDescendants = true,
+		ClipsDescendants = false, -- Let the border show!
 		ZIndex = 10,
 	}, self.Gui)
 	corner(win)
-	self.WindowStroke, self.WindowGrad = animatedStroke(win, 2, 0.15)
+	-- Animated border on the main window
+	self.WindowStroke, self.WindowGrad = animatedStroke(win, 2, 0.1)
 	self.Frame = win
 
+	-- The rest of the window needs clipping, so we put a clipping frame inside
+	local clipFrame = make("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		ZIndex = 11,
+	}, win)
+	corner(clipFrame)
+
 	-- night sky inside the window
-	local sky, skyUpdate = createNightSky(win)
+	local sky, skyUpdate = createNightSky(clipFrame)
 	self.Sky = sky
 	table.insert(self.Updaters, skyUpdate)
 
-	-- light veil so text stays readable (very subtle)
+	-- light veil so text stays readable
 	local veil = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Bg,
 		BackgroundTransparency = 0.55,
 		BorderSizePixel = 0,
-		ZIndex = 6,
-	}, win)
+		ZIndex = 12,
+	}, clipFrame)
 	corner(veil)
 
 	-- === TOP BAR ===
@@ -443,8 +455,8 @@ function Window:_build()
 		BackgroundTransparency = THEME.TrPanel,
 		BorderSizePixel = 0,
 		Active = true,
-		ZIndex = 12,
-	}, win)
+		ZIndex = 13,
+	}, clipFrame)
 	corner(top)
 	make("Frame", {
 		Size = UDim2.new(1, 0, 0, 14),
@@ -452,14 +464,14 @@ function Window:_build()
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = THEME.TrPanel,
 		BorderSizePixel = 0,
-		ZIndex = 12,
+		ZIndex = 13,
 	}, top)
 	local topLine = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 1),
 		Position = UDim2.new(0, 0, 1, -1),
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.2,
-		BorderSizePixel = 0, ZIndex = 13,
+		BorderSizePixel = 0, ZIndex = 14,
 	}, top)
 	make("UIGradient", {
 		Transparency = NumberSequence.new({
@@ -473,13 +485,13 @@ function Window:_build()
 		Size = UDim2.new(1, -110, 0, 20),
 		Position = UDim2.fromOffset(16, 6),
 		Text = self.Title,
-		Font = THEME.FontBold, TextSize = 15, ZIndex = 13,
+		Font = THEME.FontBold, TextSize = 15, ZIndex = 14,
 	}, top)
 	label({
 		Size = UDim2.new(1, -110, 0, 14),
 		Position = UDim2.fromOffset(16, 24),
 		Text = self.Subtitle,
-		TextSize = 11, TextColor3 = THEME.TextDim, ZIndex = 13,
+		TextSize = 11, TextColor3 = THEME.TextDim, ZIndex = 14,
 	}, top)
 	self.Top = top
 
@@ -487,17 +499,17 @@ function Window:_build()
 		Size = UDim2.fromOffset(28, 28),
 		Position = UDim2.new(1, -36, 0, 9),
 		BackgroundColor3 = THEME.Element,
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.4,
 		Text = "×",
 		TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 18,
 		BorderSizePixel = 0, AutoButtonColor = false,
-		ZIndex = 14,
+		ZIndex = 15,
 	}, top)
 	corner(closeBtn, UDim.new(0, 6))
-	animatedStroke(closeBtn, 1.4, 0.3)
+	animatedStroke(closeBtn, 1.4, 0.2)
 	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK }) end)
-	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.3, TextColor3 = WHITE }) end)
+	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.4, TextColor3 = WHITE }) end)
 	closeBtn.MouseButton1Click:Connect(function() self:_showQuitConfirm() end)
 
 	-- === TAB SIDEBAR ===
@@ -508,19 +520,19 @@ function Window:_build()
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = THEME.TrPanel,
 		BorderSizePixel = 0,
-		ZIndex = 11,
-	}, win)
+		ZIndex = 13,
+	}, clipFrame)
 	corner(tabListBg)
 	make("Frame", {
 		Size = UDim2.new(0, 14, 1, 0), Position = UDim2.new(1, -14, 0, 0),
 		BackgroundColor3 = THEME.Panel, BackgroundTransparency = THEME.TrPanel,
-		BorderSizePixel = 0, ZIndex = 11,
+		BorderSizePixel = 0, ZIndex = 13,
 	}, tabListBg)
 	make("Frame", {
 		Size = UDim2.new(0, 1, 1, -16),
 		Position = UDim2.new(1, -1, 0, 8),
 		BackgroundColor3 = WHITE, BackgroundTransparency = 0.7,
-		BorderSizePixel = 0, ZIndex = 11,
+		BorderSizePixel = 0, ZIndex = 13,
 	}, tabListBg)
 
 	local tabScroll = make("ScrollingFrame", {
@@ -534,7 +546,7 @@ function Window:_build()
 		ScrollBarImageTransparency = 0.6,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ZIndex = 12,
+		ZIndex = 14,
 	}, tabListBg)
 	make("UIPadding", {
 		PaddingTop = UDim.new(0, 10),
@@ -556,8 +568,8 @@ function Window:_build()
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		ZIndex = 11,
-	}, win)
+		ZIndex = 13,
+	}, clipFrame)
 	self.Content = content
 
 	-- drag
@@ -587,7 +599,6 @@ function Window:_build()
 	end))
 end
 
--- QUIT CONFIRM — now with starfield inside it, aligned buttons
 function Window:_showQuitConfirm()
 	if self._confirmOpen then return end
 	self._confirmOpen = true
@@ -609,28 +620,33 @@ function Window:_showQuitConfirm()
 		BackgroundColor3 = THEME.Bg,
 		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
+		ClipsDescendants = false, -- Let the border show
 		ZIndex = 201,
 	}, overlayFrame)
 	corner(dlg, UDim.new(0, 12))
-	animatedStroke(dlg, 2, 0.15)
+	animatedStroke(dlg, 2.5, 0.1)
 
-	-- starfield inside the dialog
-	local dlgSky, dlgSkyUpdate = createNightSky(dlg)
+	local dlgClip = make("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		ZIndex = 202,
+	}, dlg)
+	corner(dlgClip, UDim.new(0, 12))
+
+	local dlgSky, dlgSkyUpdate = createNightSky(dlgClip)
 	table.insert(self.Updaters, dlgSkyUpdate)
-	self._confirmSkyUpdate = dlgSkyUpdate
 
-	-- subtle veil
 	local dlgVeil = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Bg,
 		BackgroundTransparency = 0.55,
 		BorderSizePixel = 0,
-		ZIndex = 210,
-	}, dlg)
+		ZIndex = 203,
+	}, dlgClip)
 	corner(dlgVeil, UDim.new(0, 12))
 
-	-- content (above starfield veil)
 	label({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 24),
@@ -639,8 +655,8 @@ function Window:_showQuitConfirm()
 		TextSize = 26,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = WHITE,
-		ZIndex = 211,
-	}, dlg)
+		ZIndex = 204,
+	}, dlgClip)
 
 	label({
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -649,28 +665,27 @@ function Window:_showQuitConfirm()
 		Text = "Quit StardustUI?",
 		Font = THEME.FontBold, TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 211,
-	}, dlg)
+		ZIndex = 204,
+	}, dlgClip)
 
 	label({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 88),
 		Size = UDim2.new(1, -60, 0, 44),
-		Text = "This will turn off everything and close the menu. Continue?",
+		Text = "This will turn off every toggle and close the menu. Continue?",
 		TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = true,
-		ZIndex = 211,
-	}, dlg)
+		ZIndex = 204,
+	}, dlgClip)
 
-	-- buttons: properly aligned row, centered
 	local btnRow = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 1, -64),
 		Size = UDim2.fromOffset(330, 42),
 		BackgroundTransparency = 1,
-		ZIndex = 211,
-	}, dlg)
+		ZIndex = 204,
+	}, dlgClip)
 	make("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -689,10 +704,9 @@ function Window:_showQuitConfirm()
 			Font = THEME.FontBold, TextSize = 13,
 			BorderSizePixel = 0, AutoButtonColor = false,
 			LayoutOrder = order,
-			ZIndex = 211,
+			ZIndex = 205,
 		}, btnRow)
 		corner(b, UDim.new(0, 8))
-		-- animated stroke on BOTH buttons
 		animatedStroke(b, 1.6, isPrimary and 0.35 or 0.5)
 		b.MouseEnter:Connect(function()
 			if isPrimary then
@@ -722,7 +736,6 @@ function Window:_showQuitConfirm()
 		TweenService:Create(dlg, info, { Size = UDim2.fromOffset(360, 190), BackgroundTransparency = 1 }):Play()
 		task.delay(0.22, function()
 			if overlayFrame.Parent then overlayFrame:Destroy() end
-			-- remove the dialog updater
 			local idx = table.find(self.Updaters, dlgSkyUpdate)
 			if idx then table.remove(self.Updaters, idx) end
 		end)
@@ -730,7 +743,6 @@ function Window:_showQuitConfirm()
 	end
 
 	cancelBtn.MouseButton1Click:Connect(closeDialog)
-
 	confirmBtn.MouseButton1Click:Connect(function()
 		closeDialog()
 		for _, reset in ipairs(self._resetters) do
@@ -789,20 +801,20 @@ function Window:Tab(name)
 	local btn = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 34),
 		BackgroundColor3 = THEME.Element,
-		BackgroundTransparency = 0.5,
+		BackgroundTransparency = 0.7,
 		Text = "",
 		BorderSizePixel = 0, AutoButtonColor = false,
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.TabScroll)
 	corner(btn, UDim.new(0, 6))
-	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.7)
+	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.6)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, btn)
 	local txt = label({
 		Size = UDim2.fromScale(1, 1),
 		Text = name,
 		TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 13,
-		ZIndex = 14,
+		ZIndex = 16,
 	}, btn)
 	tab.Button = btn
 	tab.ButtonText = txt
@@ -813,7 +825,7 @@ function Window:Tab(name)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 12,
+		ZIndex = 14,
 	}, self.Content)
 	tab.Holder = holder
 
@@ -826,7 +838,7 @@ function Window:Tab(name)
 		ScrollBarImageTransparency = 0.5,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ZIndex = 12,
+		ZIndex = 14,
 	}, holder)
 	make("UIPadding", {
 		PaddingTop = UDim.new(0, 12),
@@ -842,10 +854,10 @@ function Window:Tab(name)
 
 	btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
 	btn.MouseEnter:Connect(function()
-		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.25 }) end
+		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.4 }) end
 	end)
 	btn.MouseLeave:Connect(function()
-		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.5 }) end
+		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.7 }) end
 	end)
 
 	table.insert(self.Tabs, tab)
@@ -857,13 +869,13 @@ function Window:SelectTab(tab)
 	if self.CurrentTab == tab then return end
 	if self.CurrentTab then
 		self.CurrentTab.Holder.Visible = false
-		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.5 })
+		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
 		self.CurrentTab.ButtonText.TextColor3 = WHITE
-		self.CurrentTab.ButtonStroke.Transparency = 0.7
+		self.CurrentTab.ButtonStroke.Transparency = 0.6
 	end
 	self.CurrentTab = tab
 	tab.Holder.Visible = true
-	tween(tab.Button, { BackgroundColor3 = WHITE, BackgroundTransparency = 0.05 })
+	tween(tab.Button, { BackgroundColor3 = WHITE, BackgroundTransparency = 0.1 })
 	tab.ButtonText.TextColor3 = BLACK
 	tab.ButtonStroke.Transparency = 0.15
 end
@@ -887,7 +899,7 @@ function Tab:Section(name)
 		BackgroundColor3 = THEME.Section,
 		BackgroundTransparency = THEME.TrSection,
 		BorderSizePixel = 0,
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.Scroll)
 	corner(frame, UDim.new(0, 8))
 	sec.Stroke, sec.Grad = animatedStroke(frame, 1.5, 0.4)
@@ -906,13 +918,13 @@ function Tab:Section(name)
 		Size = UDim2.new(1, 0, 0, 18),
 		BackgroundTransparency = 1,
 		LayoutOrder = 0,
-		ZIndex = 13,
+		ZIndex = 15,
 	}, frame)
 	label({
 		Size = UDim2.new(1, 0, 1, 0),
 		Text = name:upper(),
 		Font = THEME.FontBold, TextSize = 11,
-		TextColor3 = THEME.TextDim, ZIndex = 13,
+		TextColor3 = THEME.TextDim, ZIndex = 16,
 	}, header)
 
 	sec.Frame = frame
@@ -937,7 +949,7 @@ function Section:Button(text, callback)
 		Text = "",
 		BorderSizePixel = 0, AutoButtonColor = false,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.Frame)
 	corner(btn, UDim.new(0, 6))
 	animatedStroke(btn, 1.2, 0.55)
@@ -945,7 +957,7 @@ function Section:Button(text, callback)
 	local txt = label({
 		Size = UDim2.new(1, 0, 1, 0),
 		Text = text, TextColor3 = WHITE,
-		Font = THEME.FontBold, TextSize = 13, ZIndex = 14,
+		Font = THEME.FontBold, TextSize = 13, ZIndex = 16,
 	}, btn)
 	btn.MouseEnter:Connect(function() tween(btn, { BackgroundColor3 = WHITE, BackgroundTransparency = 0.1 }); txt.TextColor3 = BLACK end)
 	btn.MouseLeave:Connect(function() tween(btn, { BackgroundColor3 = THEME.Element, BackgroundTransparency = THEME.TrElement }); txt.TextColor3 = WHITE end)
@@ -973,12 +985,12 @@ function Section:Toggle(text, default, callback)
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
 	animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
-	label({ Size = UDim2.new(1, -50, 1, 0), Text = text, TextSize = 13, ZIndex = 14 }, holder)
+	label({ Size = UDim2.new(1, -50, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 
 	local btn = make("TextButton", {
 		Size = UDim2.fromOffset(36, 18),
@@ -986,7 +998,7 @@ function Section:Toggle(text, default, callback)
 		BackgroundColor3 = state and WHITE or THEME.Section,
 		BackgroundTransparency = state and 0 or 0.3,
 		Text = "", BorderSizePixel = 0, AutoButtonColor = false,
-		ZIndex = 14,
+		ZIndex = 16,
 	}, holder)
 	corner(btn, UDim.new(1, 0))
 	stroke(btn, WHITE, 1, 0.5)
@@ -994,7 +1006,7 @@ function Section:Toggle(text, default, callback)
 		Size = UDim2.fromOffset(14, 14),
 		Position = state and UDim2.new(1, -15, 0.5, -7) or UDim2.fromOffset(2, 2),
 		BackgroundColor3 = state and BLACK or WHITE,
-		BorderSizePixel = 0, ZIndex = 15,
+		BorderSizePixel = 0, ZIndex = 17,
 	}, btn)
 	corner(knob, UDim.new(1, 0))
 
@@ -1033,36 +1045,36 @@ function Section:Slider(text, min, max, default, callback)
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
 	animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, holder)
-	label({ Size = UDim2.new(1, -60, 0, 16), Text = text, TextSize = 13, ZIndex = 14 }, holder)
+	label({ Size = UDim2.new(1, -60, 0, 16), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 	local valLabel = label({
 		Size = UDim2.new(0, 60, 0, 16),
 		Position = UDim2.new(1, -60, 0, 0),
 		Text = tostring(value), TextSize = 12, TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Right, Font = THEME.FontBold, ZIndex = 14,
+		TextXAlignment = Enum.TextXAlignment.Right, Font = THEME.FontBold, ZIndex = 16,
 	}, holder)
 	local track = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 5),
 		Position = UDim2.new(0, 0, 0, 24),
 		BackgroundColor3 = THEME.Section,
 		BackgroundTransparency = 0.2,
-		BorderSizePixel = 0, ZIndex = 14,
+		BorderSizePixel = 0, ZIndex = 16,
 	}, holder)
 	corner(track, UDim.new(1, 0))
 	local fill = make("Frame", {
 		Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
-		BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 14,
+		BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 16,
 	}, track)
 	corner(fill, UDim.new(1, 0))
 	local knob = make("Frame", {
 		Size = UDim2.fromOffset(12, 12),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new((value - min) / (max - min), 0, 0.5, 0),
-		BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 15,
+		BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 17,
 	}, track)
 	corner(knob, UDim.new(1, 0))
 	stroke(knob, WHITE, 2, 0.6)
@@ -1115,12 +1127,12 @@ function Section:Textbox(text, default, callback)
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
 	animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
-	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 14 }, holder)
+	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 	local box = make("TextBox", {
 		Size = UDim2.new(0.5, -8, 0, 22),
 		Position = UDim2.new(0.5, 4, 0.5, -11),
@@ -1130,7 +1142,7 @@ function Section:Textbox(text, default, callback)
 		TextColor3 = WHITE, PlaceholderColor3 = THEME.TextMute,
 		Font = THEME.Font, TextSize = 12,
 		BorderSizePixel = 0, ClearTextOnFocus = false,
-		ZIndex = 14,
+		ZIndex = 16,
 	}, holder)
 	corner(box, UDim.new(0, 5))
 	stroke(box, WHITE, 1, 0.7)
@@ -1147,7 +1159,7 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- REDESIGNED DROPDOWN — floating popover style
+-- FIXED DROPDOWN (Floating Overlay so it never overlaps)
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
@@ -1160,26 +1172,25 @@ function Section:Dropdown(text, options, default, callback)
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 13,
+		ZIndex = 20, -- High so the dropdown floats over other elements
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
 	animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 10) }, holder)
 
-	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 14 }, holder)
+	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 21 }, holder)
 
-	-- right side: current value + chevron in a clean row
 	local rightSide = make("Frame", {
 		Size = UDim2.new(0.5, -8, 1, 0),
 		Position = UDim2.new(0.5, 4, 0, 0),
 		BackgroundTransparency = 1,
-		ZIndex = 14,
+		ZIndex = 21,
 	}, holder)
 	local current = label({
 		Size = UDim2.new(1, -20, 1, 0),
 		Text = value, TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 14,
+		ZIndex = 21,
 	}, rightSide)
 	local chevron = label({
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1187,28 +1198,33 @@ function Section:Dropdown(text, options, default, callback)
 		Size = UDim2.fromOffset(16, 16),
 		Text = "▾", TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 14,
+		ZIndex = 21,
 	}, rightSide)
 
-	-- popover list (overlays, does not resize the holder)
+	-- The overlay is parented directly to the ScreenGui, not the frame, so it can go over everything
+	local overlayContainer = make("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 150,
+	}, self.Tab.Window.Gui)
+
 	local popover = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 0),
-		Position = UDim2.new(0, 0, 1, 4),
+		Size = UDim2.new(0, 0, 0, 0),
 		BackgroundColor3 = THEME.Section,
 		BackgroundTransparency = 0.05,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Visible = false,
-		ZIndex = 100,
-	}, holder)
+		ZIndex = 151,
+	}, overlayContainer)
 	corner(popover, UDim.new(0, 6))
-	animatedStroke(popover, 1.2, 0.4)
+	animatedStroke(popover, 1.2, 0.2)
 	make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) }, popover)
 
 	local itemHolder = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		ZIndex = 101,
+		ZIndex = 152,
 	}, popover)
 	make("UIListLayout", {
 		Padding = UDim.new(0, 2),
@@ -1228,7 +1244,7 @@ function Section:Dropdown(text, options, default, callback)
 				Font = THEME.Font, TextSize = 12,
 				BorderSizePixel = 0, AutoButtonColor = false,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				LayoutOrder = i, ZIndex = 102,
+				LayoutOrder = i, ZIndex = 153,
 			}, itemHolder)
 			corner(it, UDim.new(0, 4))
 			make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, it)
@@ -1238,9 +1254,8 @@ function Section:Dropdown(text, options, default, callback)
 				value = opt
 				current.Text = opt
 				open = false
-				tween(popover, { Size = UDim2.new(1, 0, 0, 0) })
+				overlayContainer.Visible = false
 				tween(chevron, { Rotation = 0 })
-				task.delay(0.15, function() popover.Visible = false end)
 				if callback then pcall(callback, value) end
 			end)
 			items[#items + 1] = it
@@ -1248,18 +1263,41 @@ function Section:Dropdown(text, options, default, callback)
 	end
 	rebuild()
 
+	local function updatePos()
+		local abs = holder.AbsolutePosition
+		local sz = holder.AbsoluteSize
+		local h = #options * 28 + 8
+		popover.Position = UDim2.fromOffset(abs.X, abs.Y + sz.Y + 4)
+		popover.Size = UDim2.fromOffset(sz.X, h)
+	end
+
 	holder.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			open = not open
 			if open then
-				local h = #options * 28 + 8
-				popover.Visible = true
-				tween(popover, { Size = UDim2.new(1, 0, 0, h) })
+				updatePos()
+				overlayContainer.Visible = true
 				tween(chevron, { Rotation = 180 })
 			else
-				tween(popover, { Size = UDim2.new(1, 0, 0, 0) })
+				overlayContainer.Visible = false
 				tween(chevron, { Rotation = 0 })
-				task.delay(0.15, function() popover.Visible = false end)
+			end
+		end
+	end)
+
+	-- click outside to close
+	UserInputService.InputBegan:Connect(function(input)
+		if open and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			local px, py = input.Position.X, input.Position.Y
+			local hAbs = holder.AbsolutePosition
+			local hSz = holder.AbsoluteSize
+			local insideHolder = px >= hAbs.X and px <= hAbs.X + hSz.X and py >= hAbs.Y and py <= hAbs.Y + hSz.Y
+			local insidePopover = px >= popover.AbsolutePosition.X and px <= popover.AbsolutePosition.X + popover.AbsoluteSize.X and
+				py >= popover.AbsolutePosition.Y and py <= popover.AbsolutePosition.Y + popover.AbsoluteSize.Y
+			if not insideHolder and not insidePopover then
+				open = false
+				overlayContainer.Visible = false
+				tween(chevron, { Rotation = 0 })
 			end
 		end
 	end)
@@ -1268,7 +1306,7 @@ function Section:Dropdown(text, options, default, callback)
 		Set = function(_, v) value = v; current.Text = v end,
 		Get = function() return value end,
 		SetOptions = function(_, o) options = o; rebuild() end,
-		Destroy = function() holder:Destroy() end,
+		Destroy = function() holder:Destroy(); overlayContainer:Destroy() end,
 	}
 end
 
@@ -1282,12 +1320,12 @@ function Section:Keybind(text, default, callback)
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
 	animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
-	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 14 }, holder)
+	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 	local btn = make("TextButton", {
 		Size = UDim2.new(0.5, -8, 0, 22),
 		Position = UDim2.new(0.5, 4, 0.5, -11),
@@ -1296,7 +1334,7 @@ function Section:Keybind(text, default, callback)
 		Text = current.Name, TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 12,
 		BorderSizePixel = 0, AutoButtonColor = false,
-		ZIndex = 14,
+		ZIndex = 16,
 	}, holder)
 	corner(btn, UDim.new(0, 5))
 	stroke(btn, WHITE, 1, 0.7)
@@ -1325,7 +1363,7 @@ function Section:Label(text)
 	local l = label({
 		Size = UDim2.new(1, 0, 0, 20),
 		Text = text, TextSize = 12, TextColor3 = THEME.TextDim,
-		LayoutOrder = self:_nextOrder(), TextWrapped = true, ZIndex = 13,
+		LayoutOrder = self:_nextOrder(), TextWrapped = true, ZIndex = 15,
 	}, self.Frame)
 	return { Set = function(_, t) l.Text = t end, Destroy = function() l:Destroy() end }
 end
@@ -1337,7 +1375,7 @@ function Section:Divider()
 		BackgroundTransparency = 0.85,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 13,
+		ZIndex = 15,
 	}, self.Frame)
 	return { Destroy = function() d:Destroy() end }
 end
