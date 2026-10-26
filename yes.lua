@@ -1,5 +1,5 @@
 --[[
-	StardustUI v17 — Dropdowns that expand/push elements down without overlapping, fixed +/- indicator
+	StardustUI v18 — Dropdown expands downwards and pushes elements, fixed +/- position
 ]]
 
 local StardustUI = {}
@@ -754,7 +754,7 @@ function Window:_showQuitConfirm()
 		TextSize = 26,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = WHITE,
-		ZIndex = 204,
+			ZIndex = 204,
 	}, dlgClip)
 
 	label({
@@ -1342,7 +1342,7 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- FINAL FIXED DROPDOWN (Utilizes CanvasGroup to expand and push without overlapping)
+-- FIXED DROPDOWN (Expands downwards and pushes elements below)
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
@@ -1351,33 +1351,32 @@ function Section:Dropdown(text, options, default, callback)
 
 	local container = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		LayoutOrder = self:_nextOrder(),
-		ZIndex = 15,
-	}, self.Frame)
-
-	local header = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
+		LayoutOrder = self:_nextOrder(),
 		ZIndex = 15,
+		AutomaticSize = Enum.AutomaticSize.Y,
+	}, self.Frame)
+	corner(container, UDim.new(0, 6))
+	local st = animatedStroke(container, 1.2, 0.55)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingBottom = UDim.new(0, 4) }, container)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 4),
+		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, container)
-	corner(header, UDim.new(0, 6))
-	local st = animatedStroke(header, 1.2, 0.55)
 
-	local headerBtn = make("TextButton", {
-		Size = UDim2.new(1, 0, 1, 0),
+	local header = make("TextButton", {
+		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundTransparency = 1,
 		Text = "",
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
+		LayoutOrder = 1,
 		ZIndex = 16,
-	}, header)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, headerBtn)
+	}, container)
 	
-	label({ Size = UDim2.new(0.6, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 17 }, headerBtn)
+	label({ Size = UDim2.new(0.6, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 17 }, header)
 	
 	local current = label({
 		Size = UDim2.new(0.4, -24, 1, 0),
@@ -1385,7 +1384,7 @@ function Section:Dropdown(text, options, default, callback)
 		Text = value, TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 17,
-	}, headerBtn)
+	}, header)
 	
 	local indicator = label({
 		Size = UDim2.fromOffset(20, 20),
@@ -1394,19 +1393,17 @@ function Section:Dropdown(text, options, default, callback)
 		TextSize = 18, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 17,
-	}, headerBtn)
+	}, header)
 
+	-- This frame holds the options. It's Visible = false so you can't click it when closed.
 	local listFrame = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
-		BackgroundColor3 = THEME.Section,
-		BackgroundTransparency = 0.5,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 18,
-	}, header)
-	corner(listFrame, UDim.new(0, 6))
-	stroke(listFrame, WHITE, 1, 0.7)
-	make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) }, listFrame)
+		LayoutOrder = 2,
+		ZIndex = 16,
+	}, container)
 	make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, listFrame)
 
 	local items = {}
@@ -1416,17 +1413,17 @@ function Section:Dropdown(text, options, default, callback)
 		for i, opt in ipairs(options) do
 			local it = make("TextButton", {
 				Size = UDim2.new(1, 0, 0, 26),
-				BackgroundColor3 = THEME.Element,
+				BackgroundColor3 = THEME.Section,
 				BackgroundTransparency = 0.5,
 				Text = opt, TextColor3 = WHITE,
 				Font = THEME.Font, TextSize = 12,
 				BorderSizePixel = 0, AutoButtonColor = false,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				LayoutOrder = i, ZIndex = 19,
+				LayoutOrder = i, ZIndex = 17,
 			}, listFrame)
 			corner(it, UDim.new(0, 4))
 			make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, it)
-			applyHoverEffect(it, nil, THEME.Element, WHITE, 0.5, 0)
+			applyHoverEffect(it, nil, THEME.Section, WHITE, 0.5, 0)
 			it.MouseEnter:Connect(function() tween(it, { TextColor3 = BLACK }) end)
 			it.MouseLeave:Connect(function() tween(it, { TextColor3 = WHITE }) end)
 			it.MouseButton1Click:Connect(function()
@@ -1435,7 +1432,6 @@ function Section:Dropdown(text, options, default, callback)
 				open = false
 				listFrame.Visible = false
 				indicator.Text = "+"
-				container.Size = UDim2.new(1, 0, 0, 32)
 				if callback then pcall(callback, value) end
 			end)
 			items[#items + 1] = it
@@ -1445,25 +1441,22 @@ function Section:Dropdown(text, options, default, callback)
 
 	applyHoverEffect(header, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	
-	headerBtn.MouseEnter:Connect(function() 
+	header.MouseEnter:Connect(function() 
 		if not open then tween(indicator, { TextColor3 = WHITE }) end
 	end)
-	headerBtn.MouseLeave:Connect(function() 
+	header.MouseLeave:Connect(function() 
 		if not open then tween(indicator, { TextColor3 = THEME.TextDim }) end
 	end)
 
-	headerBtn.MouseButton1Click:Connect(function()
+	header.MouseButton1Click:Connect(function()
 		open = not open
 		if open then
-			local h = 32 + (#options * 28) + 8
-			container.Size = UDim2.new(1, 0, 0, h)
-			listFrame.Size = UDim2.new(1, 0, 0, h - 32)
-			listFrame.Position = UDim2.new(0, 0, 0, 36)
+			local h = (#options * 28) + 4
+			listFrame.Size = UDim2.new(1, 0, 0, h)
 			listFrame.Visible = true
 			indicator.Text = "-"
 			tween(indicator, { TextColor3 = WHITE })
 		else
-			container.Size = UDim2.new(1, 0, 0, 32)
 			listFrame.Visible = false
 			indicator.Text = "+"
 			tween(indicator, { TextColor3 = THEME.TextDim })
