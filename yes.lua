@@ -1,5 +1,5 @@
 --[[
-	StardustUI v10 — Smooth open/close, fixed TextScaled username
+	StardustUI v11 — Info Tab with User Card & Executor details
 ]]
 
 local StardustUI = {}
@@ -618,7 +618,7 @@ function Window:_build()
 		TextWrapped = false,
 		ZIndex = 15,
 	}, userProfile)
-	make("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 7 }, nameLbl) -- FIXED: Properly scales small to fit
+	make("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 7 }, nameLbl)
 	
 	make("Frame", {
 		Size = UDim2.new(1, -50, 0, 1),
@@ -752,7 +752,7 @@ function Window:_showQuitConfirm()
 	label({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 60),
-			Size = UDim2.new(1, -40, 0, 22),
+		Size = UDim2.new(1, -40, 0, 22),
 		Text = "Quit StardustUI?",
 		Font = THEME.FontBold, TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -866,20 +866,17 @@ function Window:Toggle(v)
 	self.Visible = targetVisible
 
 	if self.Visible then
-		-- STAR OPEN ANIMATION
 		self.Frame.Visible = true
 		self.Frame.Size = UDim2.fromOffset(10, 10)
 		self.Frame.BackgroundTransparency = 1
 		self.Frame.Rotation = -45
 		
-		-- FIXED: Using Quint instead of Back to prevent the glitchy overshoot
 		tween(self.Frame, {
 			Size = UDim2.fromOffset(THEME.WinW, THEME.WinH),
 			BackgroundTransparency = THEME.TrWindow,
 			Rotation = 0
 		}, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 	else
-		-- STAR CLOSE ANIMATION
 		tween(self.Frame, {
 			Size = UDim2.fromOffset(10, 10),
 			BackgroundTransparency = 1,
@@ -1058,6 +1055,77 @@ end
 function Section:_nextOrder()
 	self.Order += 1
 	return self.Order
+end
+
+-- NEW: Custom Card for User & Executor info
+function Section:Card(title, avatarUrl, fields)
+	local card = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 86),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = THEME.TrElement,
+		BorderSizePixel = 0,
+		LayoutOrder = self:_nextOrder(),
+		ZIndex = 15,
+	}, self.Frame)
+	corner(card, UDim.new(0, 6))
+	local st = animatedStroke(card, 1.2, 0.55)
+	make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, card)
+
+	local img = make("ImageLabel", {
+		Size = UDim2.fromOffset(54, 54),
+		Position = UDim2.fromOffset(0, 6),
+		BackgroundColor3 = THEME.Section,
+		BorderSizePixel = 0,
+		Image = avatarUrl,
+		ZIndex = 16,
+	}, card)
+	corner(img, UDim.new(0, 6))
+	stroke(img, WHITE, 1, 0.5)
+
+	local header = label({
+		Size = UDim2.new(1, -70, 0, 16),
+		Position = UDim2.fromOffset(64, 4),
+		Text = title,
+		Font = THEME.FontBold, TextSize = 14,
+		TextScaled = true,
+		ZIndex = 16,
+	}, card)
+	make("UITextSizeConstraint", { MaxTextSize = 14, MinTextSize = 10 }, header)
+
+	local yOffset = 24
+	for _, field in ipairs(fields) do
+		local row = make("Frame", {
+			Size = UDim2.new(1, -70, 0, 14),
+			Position = UDim2.fromOffset(64, yOffset),
+			BackgroundTransparency = 1,
+			ZIndex = 16,
+		}, card)
+		
+		label({
+			Size = UDim2.new(0.35, 0, 1, 0),
+			Text = field[1] .. ":",
+			TextSize = 11, TextColor3 = THEME.TextDim,
+			ZIndex = 16,
+		}, row)
+		
+		label({
+			Size = UDim2.new(0.65, 0, 1, 0),
+			Position = UDim2.new(0.35, 0, 0, 0),
+			Text = tostring(field[2]),
+			TextSize = 11, TextColor3 = WHITE,
+			Font = THEME.FontBold,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 16,
+		}, row)
+		
+		yOffset += 16
+	end
+
+	applyHoverEffect(card, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
+
+	return {
+		Destroy = function() card:Destroy() end,
+	}
 end
 
 ---------------------------------------------------------------------
