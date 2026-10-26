@@ -220,14 +220,14 @@ local function createNightSky(parent)
 	local function addStars(count, size, speed, baseTr, z)
 		for _ = 1, count do
 			local f = make("TextLabel", {
-				Size = UDim2.fromOffset(8 + size * 2, 8 + size * 2),
+				Size = UDim2.fromOffset(4, 4),
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				Font = Enum.Font.SourceSansBold,
 				Text = "★",
 				TextColor3 = WHITE,
-				TextSize = 4 + size * 2,
+				TextSize = 4,
 				TextTransparency = baseTr,
 				TextStrokeColor3 = THEME.Bg,
 				TextStrokeTransparency = 0.65,
