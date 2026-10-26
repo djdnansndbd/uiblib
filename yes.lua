@@ -1,5 +1,5 @@
 --[[
-	StardustUI v16 — Final Dropdown Fix, + / - Indicators
+	StardustUI v17 — Dropdowns that expand/push elements down without overlapping, fixed +/- indicator
 ]]
 
 local StardustUI = {}
@@ -753,7 +753,7 @@ function Window:_showQuitConfirm()
 		Text = "⚠",
 		TextSize = 26,
 		TextXAlignment = Enum.TextXAlignment.Center,
-			TextColor3 = WHITE,
+		TextColor3 = WHITE,
 		ZIndex = 204,
 	}, dlgClip)
 
@@ -1342,14 +1342,13 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- FINAL FIXED DROPDOWN (Utilizes an external frame, no overlaps, no ghosts)
+-- FINAL FIXED DROPDOWN (Utilizes CanvasGroup to expand and push without overlapping)
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
 	local value = default
 	local open = false
 
-	-- The container for the header AND the list
 	local container = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundTransparency = 1,
@@ -1357,24 +1356,17 @@ function Section:Dropdown(text, options, default, callback)
 		LayoutOrder = self:_nextOrder(),
 		ZIndex = 15,
 	}, self.Frame)
-	make("UIListLayout", {
-		Padding = UDim.new(0, 4),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, container)
 
-	-- The actual visible header
 	local header = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
-		LayoutOrder = 1,
 		ZIndex = 15,
 	}, container)
 	corner(header, UDim.new(0, 6))
 	local st = animatedStroke(header, 1.2, 0.55)
 
-	-- The clickable area of the header
 	local headerBtn = make("TextButton", {
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
@@ -1395,7 +1387,6 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, headerBtn)
 	
-	-- The + / - Indicator
 	local indicator = label({
 		Size = UDim2.fromOffset(20, 20),
 		Position = UDim2.new(1, 0, 0.5, -10),
@@ -1405,17 +1396,14 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, headerBtn)
 
-	-- The list that appears below
 	local listFrame = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 0), -- Starts at 0 height
+		Size = UDim2.new(1, 0, 0, 0),
 		BackgroundColor3 = THEME.Section,
 		BackgroundTransparency = 0.5,
 		BorderSizePixel = 0,
-		LayoutOrder = 2,
-		ClipsDescendants = true,
-		Visible = false, -- Hidden by default!
+		Visible = false,
 		ZIndex = 18,
-	}, container)
+	}, header)
 	corner(listFrame, UDim.new(0, 6))
 	stroke(listFrame, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) }, listFrame)
@@ -1447,6 +1435,7 @@ function Section:Dropdown(text, options, default, callback)
 				open = false
 				listFrame.Visible = false
 				indicator.Text = "+"
+				container.Size = UDim2.new(1, 0, 0, 32)
 				if callback then pcall(callback, value) end
 			end)
 			items[#items + 1] = it
@@ -1466,12 +1455,15 @@ function Section:Dropdown(text, options, default, callback)
 	headerBtn.MouseButton1Click:Connect(function()
 		open = not open
 		if open then
-			local h = (#options * 28) + 8
-			listFrame.Size = UDim2.new(1, 0, 0, h)
+			local h = 32 + (#options * 28) + 8
+			container.Size = UDim2.new(1, 0, 0, h)
+			listFrame.Size = UDim2.new(1, 0, 0, h - 32)
+			listFrame.Position = UDim2.new(0, 0, 0, 36)
 			listFrame.Visible = true
 			indicator.Text = "-"
 			tween(indicator, { TextColor3 = WHITE })
 		else
+			container.Size = UDim2.new(1, 0, 0, 32)
 			listFrame.Visible = false
 			indicator.Text = "+"
 			tween(indicator, { TextColor3 = THEME.TextDim })
