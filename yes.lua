@@ -1,5 +1,5 @@
 --[[
-	StardustUI v8 — Fixed TextButton errors, Fixed long usernames, Clean hover styles
+	StardustUI v9 — True Star animation, perfect long usernames, bug fixes
 ]]
 
 local StardustUI = {}
@@ -99,6 +99,7 @@ local function label(props, parent)
 		TextColor3 = THEME.Text,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextStrokeTransparency = 1, -- Fixes default thick roblox text outlines
 		ZIndex = 2,
 	}
 	for k, v in pairs(props) do base[k] = v end
@@ -127,7 +128,6 @@ local function ripple(parent, x, y)
 	task.delay(0.45, function() r:Destroy() end)
 end
 
--- Clean, subtle hover (Light Gray + Brighter Border)
 local function applyHoverEffect(btn, isSelectedFunc, baseColor, hoverColor, baseTr, hoverTr, strokeObj, baseStrTr, hoverStrTr)
 	btn.MouseEnter:Connect(function()
 		if isSelectedFunc and isSelectedFunc() then return end
@@ -427,7 +427,7 @@ function Window:_build()
 		BackgroundTransparency = THEME.TrWindow,
 		BorderSizePixel = 0,
 		Active = true,
-		ClipsDescendants = false, 
+		ClipsDescendants = true, -- FIXED: Prevents stars from bleeding out during star animation
 		ZIndex = 10,
 	}, self.Gui)
 	corner(win)
@@ -612,8 +612,9 @@ function Window:_build()
 		Size = UDim2.new(1, -50, 0, 14),
 		Position = UDim2.fromOffset(46, 10),
 		Text = player.DisplayName,
-		Font = THEME.FontBold, TextSize = 13,
-		TextTruncate = Enum.TextTruncate.AtEnd, -- Prevents long names from breaking the UI
+		Font = THEME.FontBold, 
+		TextSize = 13,
+		TextScaled = true, -- FIXED: Long usernames shrink to fit automatically
 		ZIndex = 15,
 	}, userProfile)
 	
@@ -863,6 +864,7 @@ function Window:Toggle(v)
 	self.Visible = targetVisible
 
 	if self.Visible then
+		-- STAR OPEN ANIMATION
 		self.Frame.Visible = true
 		self.Frame.Size = UDim2.fromOffset(10, 10)
 		self.Frame.BackgroundTransparency = 1
@@ -872,14 +874,16 @@ function Window:Toggle(v)
 			Size = UDim2.fromOffset(THEME.WinW, THEME.WinH),
 			BackgroundTransparency = THEME.TrWindow,
 			Rotation = 0
-		}, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out))
+		}, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out))
 	else
+		-- STAR CLOSE ANIMATION
 		tween(self.Frame, {
-			Size = UDim2.fromOffset(0, 0),
+			Size = UDim2.fromOffset(10, 10), -- Collapses into a tiny star point
 			BackgroundTransparency = 1,
 			Rotation = 45
-		}, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In))
-		task.delay(0.3, function()
+		}, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In))
+		
+		task.delay(0.35, function()
 			if not self.Visible then
 				self.Frame.Visible = false
 			end
@@ -1070,7 +1074,6 @@ function Section:Button(text, callback)
 	local st = animatedStroke(btn, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, btn)
 	
-	-- We use a TextLabel instead of the TextButton's text property
 	local txt = label({
 		Size = UDim2.new(1, 0, 1, 0),
 		Text = text, TextColor3 = WHITE,
