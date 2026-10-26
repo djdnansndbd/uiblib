@@ -1,5 +1,5 @@
 --[[
-	StardustUI v13 — Removed animations, fixed dropdown clicking and indicators
+	StardustUI v14 — Removed open/close animations entirely, fixed dropdown ZIndex overlaps
 ]]
 
 local StardustUI = {}
@@ -1402,7 +1402,7 @@ function Section:Dropdown(text, options, default, callback)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		LayoutOrder = 2,
-		ZIndex = 16,
+		ZIndex = 18,
 	}, holder)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, list)
 	make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, list)
@@ -1420,7 +1420,7 @@ function Section:Dropdown(text, options, default, callback)
 				Font = THEME.Font, TextSize = 12,
 				BorderSizePixel = 0, AutoButtonColor = false,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				LayoutOrder = i, ZIndex = 17,
+				LayoutOrder = i, ZIndex = 18,
 			}, list)
 			corner(it, UDim.new(0, 4))
 			make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, it)
