@@ -1,9 +1,6 @@
 --[[
-	StardustUI v2 — GUI framework with animated night-sky theme
-	Matches the StardustHatchHUD aesthetic:
-	  - black base, grey sections, thin white stroke that sweeps with a moving gradient
-	  - parallax star field, sparkle stars, shooting stars, constellation sparks in the background
-	  - fully functional tabs, sections, buttons, toggles, sliders, textboxes, dropdowns, keybinds
+	StardustUI v3 — grey sky, bright sparkles, frequent shooters, confirm-on-quit
+	Load via require() or loadstring(). API is unchanged from v2.
 ]]
 
 local StardustUI = {}
@@ -19,18 +16,18 @@ local playerGui = player:WaitForChild("PlayerGui")
 local rng = Random.new()
 
 ---------------------------------------------------------------------
--- THEME
+-- THEME (lighter, greyer)
 ---------------------------------------------------------------------
 local THEME = {
-	Bg        = Color3.fromRGB(8, 8, 10),
-	BgInner   = Color3.fromRGB(14, 14, 18),
-	Panel     = Color3.fromRGB(12, 12, 16),
-	Section   = Color3.fromRGB(22, 22, 28),
-	Element   = Color3.fromRGB(30, 30, 38),
+	Bg        = Color3.fromRGB(45, 45, 52),
+	BgInner   = Color3.fromRGB(55, 55, 64),
+	Panel     = Color3.fromRGB(52, 52, 60),
+	Section   = Color3.fromRGB(62, 62, 72),
+	Element   = Color3.fromRGB(74, 74, 86),
 	Stroke    = Color3.fromRGB(255, 255, 255),
 	Text      = Color3.fromRGB(255, 255, 255),
-	TextDim   = Color3.fromRGB(150, 150, 160),
-	TextMute  = Color3.fromRGB(80, 80, 90),
+	TextDim   = Color3.fromRGB(200, 200, 210),
+	TextMute  = Color3.fromRGB(130, 130, 145),
 	Font      = Enum.Font.GothamMedium,
 	FontBold  = Enum.Font.GothamBold,
 	Corner    = UDim.new(0, 8),
@@ -71,7 +68,7 @@ local function stroke(parent, color, thickness, transparency)
 	}, parent)
 end
 
--- Animated gradient stroke: sweeps a bright band across the stroke over time
+local _origAnimatedStroke
 local function animatedStroke(parent, thickness, baseTransparency)
 	local st = stroke(parent, THEME.Stroke, thickness or 1.4, baseTransparency or 0.55)
 	local grad = make("UIGradient", {
@@ -83,6 +80,9 @@ local function animatedStroke(parent, thickness, baseTransparency)
 			NumberSequenceKeypoint.new(1, 0.9),
 		}),
 	}, st)
+	if StardustUI._strokes then
+		table.insert(StardustUI._strokes, { grad = grad, offset = rng:NextNumber(0, 360) })
+	end
 	return st, grad
 end
 
@@ -122,9 +122,8 @@ local function ripple(parent, x, y)
 end
 
 ---------------------------------------------------------------------
--- NIGHT SKY BACKGROUND
+-- NIGHT SKY
 ---------------------------------------------------------------------
--- A single builder that creates a starfield inside a frame and returns an updater
 local function createNightSky(parent)
 	local sky = make("Frame", {
 		Name = "NightSky",
@@ -147,7 +146,7 @@ local function createNightSky(parent)
 		}, sky)
 	end
 
-	-- far / mid / near stars
+	-- parallax stars
 	local stars = {}
 	local function addStars(count, size, speed, baseTr, depth, z)
 		for _ = 1, count do
@@ -170,40 +169,62 @@ local function createNightSky(parent)
 			}
 		end
 	end
-	addStars(50, 1, 0.006, 0.55, 0.01, 2)
-	addStars(24, 2, 0.013, 0.30, 0.02, 3)
-	addStars(10, 3, 0.022, 0.10, 0.035, 4)
+	addStars(60, 1, 0.006, 0.35, 0.01, 2)   -- brighter far stars
+	addStars(28, 2, 0.013, 0.15, 0.02, 3)   -- brighter mid stars
+	addStars(12, 3, 0.022, 0.05, 0.035, 4)  -- brighter near stars
 
-	-- sparkle stars (4-point crosses)
+	-- BRIGHTER SPARKLES
 	local sparkles = {}
-	for _ = 1, 5 do
+	for _ = 1, 6 do
 		local c = make("Frame", {
-			Size = UDim2.fromOffset(14, 14),
+			Size = UDim2.fromOffset(20, 20),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
 			ZIndex = 4,
 		}, layers[3])
+
+		-- soft bloom halo behind the cross
+		local halo = make("Frame", {
+			Size = UDim2.fromScale(1.6, 1.6),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.7,
+			BorderSizePixel = 0,
+			ZIndex = 3,
+		}, c)
+		corner(halo, UDim.new(1, 0))
+		make("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.4),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}, halo)
+
 		local h = make("Frame", {
 			Size = UDim2.new(1, 0, 0, 1), AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			BackgroundColor3 = WHITE, BorderSizePixel = 0,
+			ZIndex = 4,
 		}, c)
 		make("UIGradient", { Transparency = FADE_ENDS }, h)
 		local v = make("Frame", {
 			Size = UDim2.new(0, 1, 1, 0), AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			BackgroundColor3 = WHITE, BorderSizePixel = 0,
+			ZIndex = 4,
 		}, c)
 		make("UIGradient", { Transparency = FADE_ENDS, Rotation = 90 }, v)
 		local core = make("Frame", {
-			Size = UDim2.fromOffset(2, 2),
+			Size = UDim2.fromOffset(4, 4),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			BackgroundColor3 = WHITE, BorderSizePixel = 0,
+			ZIndex = 5,
 		}, c)
 		corner(core, UDim.new(1, 0))
 		sparkles[#sparkles + 1] = {
-			c = c, h = h, v = v, core = core,
+			c = c, h = h, v = v, core = core, halo = halo,
 			x = rng:NextNumber(0.05, 0.95), y = rng:NextNumber(0.05, 0.95),
 			vx = rng:NextNumber(-0.003, 0.003), vy = rng:NextNumber(0.001, 0.005),
 			phase = rng:NextNumber(0, math.pi * 2),
@@ -211,7 +232,7 @@ local function createNightSky(parent)
 		}
 	end
 
-	-- constellation-ish dots (simplified; no lines to avoid clutter at window size)
+	-- constellation dots
 	local constNodes = {}
 	for _ = 1, 8 do
 		local f = make("Frame", {
@@ -222,7 +243,7 @@ local function createNightSky(parent)
 			ZIndex = 3,
 		}, layers[2])
 		corner(f, UDim.new(1, 0))
-		make("UIStroke", { Color = WHITE, Thickness = 2, Transparency = 0.88 }, f)
+		make("UIStroke", { Color = WHITE, Thickness = 2, Transparency = 0.85 }, f)
 		constNodes[#constNodes + 1] = {
 			f = f,
 			x = rng:NextNumber(0.05, 0.95), y = rng:NextNumber(0.05, 0.95),
@@ -230,14 +251,14 @@ local function createNightSky(parent)
 		}
 	end
 
-	-- shooting stars (recycled)
+	-- frequent shooting stars
 	local shooters = {}
-	local nextShooter = os.clock() + 2
+	local nextShooter = 0.5
 
 	local function spawnShooter()
 		local W = sky.AbsoluteSize.X
 		if W < 50 then return end
-		local len = rng:NextNumber(80, 140)
+		local len = rng:NextNumber(70, 130)
 		local ang = math.rad(rng:NextNumber(18, 40))
 		local dirx = rng:NextNumber() < 0.5 and 1 or -1
 		local dx, dy = math.cos(ang) * dirx, math.sin(ang)
@@ -253,18 +274,19 @@ local function createNightSky(parent)
 		make("UIGradient", {
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 1),
-				NumberSequenceKeypoint.new(0.7, 0.4),
+				NumberSequenceKeypoint.new(0.7, 0.3),
 				NumberSequenceKeypoint.new(1, 0),
 			}),
 		}, tail)
 		local head = make("Frame", {
-			Size = UDim2.fromOffset(3, 3),
+			Size = UDim2.fromOffset(4, 4),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundColor3 = WHITE,
 			BorderSizePixel = 0,
 			ZIndex = 4,
 		}, layers[3])
 		corner(head, UDim.new(1, 0))
+		make("UIStroke", { Color = WHITE, Thickness = 4, Transparency = 0.6 }, head)
 		shooters[#shooters + 1] = {
 			tail = tail, head = head,
 			x = rng:NextNumber(0.1, 0.9) * W, y = -40,
@@ -274,7 +296,6 @@ local function createNightSky(parent)
 		}
 	end
 
-	-- updater
 	local elapsed = 0
 	local function update(dt)
 		elapsed += dt
@@ -282,13 +303,11 @@ local function createNightSky(parent)
 		local H = sky.AbsoluteSize.Y
 		if W <= 0 or H <= 0 then return end
 
-		-- stars
 		for _, s in ipairs(stars) do
 			s.y += s.speed * dt
 			s.x -= s.speed * 0.35 * dt
 			if s.y > 1.02 then
-				s.y = -0.02
-				s.x = rng:NextNumber()
+				s.y = -0.02; s.x = rng:NextNumber()
 				s.phase = rng:NextNumber(0, math.pi * 2)
 				s.tw = rng:NextNumber(0.6, 2.4)
 			end
@@ -300,7 +319,7 @@ local function createNightSky(parent)
 			s.f.BackgroundTransparency = s.base + (1 - s.base) * 0.7 * tw
 		end
 
-		-- sparkles
+		-- brighter sparkles: bigger pulse, brighter minimum, halo breathes too
 		for _, sp in ipairs(sparkles) do
 			sp.x += sp.vx * dt
 			sp.y += sp.vy * dt
@@ -308,26 +327,27 @@ local function createNightSky(parent)
 			if sp.y > 1.03 then sp.y = -0.03 end
 			sp.c.Position = UDim2.fromScale(sp.x, sp.y)
 			local s = math.max(0, math.sin(elapsed * sp.tw + sp.phase))
-			local p = s ^ 3
-			sp.c.Size = UDim2.fromOffset(8 + 10 * p, 8 + 10 * p)
-			local tr = 1 - (0.3 + 0.7 * p)
+			local p = s ^ 2           -- softer falloff so it's bright more of the time
+			local boost = 0.35 + 0.65 * p -- never fully dark
+			sp.c.Size = UDim2.fromOffset(14 + 20 * p, 14 + 20 * p)
+			local tr = 1 - (0.55 + 0.45 * boost) -- arms stay visible
 			sp.h.BackgroundTransparency = tr
 			sp.v.BackgroundTransparency = tr
-			sp.core.BackgroundTransparency = 0.3 * (1 - p)
+			sp.core.BackgroundTransparency = math.max(0, 0.35 * (1 - boost))
+			sp.halo.BackgroundTransparency = 0.35 + 0.4 * (1 - p)
 			sp.c.Rotation = math.deg(math.atan2(sp.vy, sp.vx)) + elapsed * 6
 		end
 
-		-- constellation dots pulse
 		for _, nd in ipairs(constNodes) do
 			nd.f.Position = UDim2.fromScale(nd.x, nd.y)
 			local pulse = 0.5 + 0.5 * math.sin(elapsed * 1.4 + nd.phase)
 			nd.f.BackgroundTransparency = 0.4 * (1 - pulse)
 		end
 
-		-- shooting stars
-		if elapsed >= nextShooter then
+		-- frequent shooters: keep up to 3 alive, respawn every 1.2–2.8s
+		if elapsed >= nextShooter and #shooters < 3 then
 			spawnShooter()
-			nextShooter = elapsed + rng:NextNumber(4, 9)
+			nextShooter = elapsed + rng:NextNumber(1.2, 2.8)
 		end
 		for i = #shooters, 1, -1 do
 			local s = shooters[i]
@@ -335,14 +355,15 @@ local function createNightSky(parent)
 			s.x += s.dx * s.speed * dt
 			s.y += s.dy * s.speed * dt
 			s.tail.Position = UDim2.fromOffset(s.x, s.y)
-			s.head.Position = UDim2.fromOffset(s.x + s.dx * s.tail.AbsoluteSize.X * 0.5,
-				s.y + s.dy * s.tail.AbsoluteSize.X * 0.5)
+			s.head.Position = UDim2.fromOffset(
+				s.x + s.dx * s.tail.AbsoluteSize.X * 0.5,
+				s.y + s.dy * s.tail.AbsoluteSize.X * 0.5
+			)
 			local fade = math.min(1, s.age / 0.15) * math.min(1, (s.life - s.age) / 0.3)
 			s.tail.BackgroundTransparency = 1 - fade
 			s.head.BackgroundTransparency = 1 - fade
 			if s.y > H + 60 or s.x < -120 or s.x > W + 120 or s.age >= s.life then
-				s.tail:Destroy()
-				s.head:Destroy()
+				s.tail:Destroy(); s.head:Destroy()
 				table.remove(shooters, i)
 			end
 		end
@@ -368,9 +389,22 @@ function StardustUI.new(opts)
 	self.CurrentTab = nil
 	self.Connections = {}
 	self.Destroyed = false
-	self.Updaters = {} -- list of background update functions
+	self.Updaters = {}
+	self._resetters = {} -- toggles register here
 
-	-- one ScreenGui per window? No — one shared ScreenGui with a unique frame name
+	if not StardustUI._strokeRunning then
+		StardustUI._strokeRunning = true
+		StardustUI._strokes = {}
+		RunService.Heartbeat:Connect(function()
+			local t = os.clock()
+			for _, entry in ipairs(StardustUI._strokes) do
+				if entry.grad and entry.grad.Parent then
+					entry.grad.Rotation = (t * 80 + entry.offset) % 360
+				end
+			end
+		end)
+	end
+
 	local sg = playerGui:FindFirstChild("StardustUI")
 	if not sg then
 		sg = make("ScreenGui", {
@@ -384,7 +418,7 @@ function StardustUI.new(opts)
 	self.Gui = sg
 
 	self:_build()
-	-- one Heartbeat loop drives all windows
+
 	if not StardustUI._running then
 		StardustUI._running = true
 		StardustUI._windows = {}
@@ -416,52 +450,47 @@ function Window:_build()
 		ZIndex = 10,
 	}, self.Gui)
 	corner(win)
-	local winStroke, winGrad = animatedStroke(win, 1.5, 0.35)
+	self.WindowStroke, self.WindowGrad = animatedStroke(win, 1.5, 0.25)
 	self.Frame = win
-	self.WindowStroke = winStroke
-	self.WindowGrad = winGrad
 
-	-- build the night sky *inside* the window
 	local sky, skyUpdate = createNightSky(win)
 	self.Sky = sky
 	table.insert(self.Updaters, skyUpdate)
 
-	-- darken the sky behind the content (subtle veil so UI is readable)
+	-- lighter veil now
 	local veil = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Bg,
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.35,
 		BorderSizePixel = 0,
 		ZIndex = 6,
 	}, win)
 	corner(veil)
 
-	-- === TOP BAR ===
+	-- top bar
 	local top = make("Frame", {
 		Name = "TopBar",
 		Size = UDim2.new(1, 0, 0, 46),
 		BackgroundColor3 = THEME.Panel,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
 		Active = true,
 		ZIndex = 12,
 	}, win)
 	corner(top)
-	-- square off the bottom edge
 	make("Frame", {
 		Size = UDim2.new(1, 0, 0, 14),
 		Position = UDim2.new(0, 0, 1, -14),
 		BackgroundColor3 = THEME.Panel,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
 		ZIndex = 12,
 	}, top)
-	-- top bar animated underline
 	local topLine = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 1),
 		Position = UDim2.new(0, 0, 1, -1),
 		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		ZIndex = 13,
 	}, top)
@@ -477,62 +506,55 @@ function Window:_build()
 		Size = UDim2.new(1, -110, 0, 20),
 		Position = UDim2.fromOffset(16, 6),
 		Text = self.Title,
-		Font = THEME.FontBold,
-		TextSize = 15,
-		ZIndex = 13,
+		Font = THEME.FontBold, TextSize = 15, ZIndex = 13,
 	}, top)
 	label({
 		Size = UDim2.new(1, -110, 0, 14),
 		Position = UDim2.fromOffset(16, 24),
 		Text = self.Subtitle,
-		TextSize = 11,
-		TextColor3 = THEME.TextDim,
-		ZIndex = 13,
+		TextSize = 11, TextColor3 = THEME.TextDim, ZIndex = 13,
 	}, top)
 	self.Top = top
 
-	-- close / minimize
 	local closeBtn = make("TextButton", {
 		Size = UDim2.fromOffset(28, 28),
 		Position = UDim2.new(1, -36, 0, 9),
 		BackgroundColor3 = THEME.Element,
 		Text = "×",
 		TextColor3 = WHITE,
-		Font = THEME.FontBold,
-		TextSize = 18,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
+		Font = THEME.FontBold, TextSize = 18,
+		BorderSizePixel = 0, AutoButtonColor = false,
 		ZIndex = 14,
 	}, top)
 	corner(closeBtn, UDim.new(0, 6))
 	stroke(closeBtn, WHITE, 1, 0.7)
 	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { BackgroundColor3 = WHITE, TextColor3 = BLACK }) end)
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { BackgroundColor3 = THEME.Element, TextColor3 = WHITE }) end)
-	closeBtn.MouseButton1Click:Connect(function() self:Toggle(false) end)
+	closeBtn.MouseButton1Click:Connect(function()
+		self:_showQuitConfirm()
+	end)
 
-	-- === TAB LIST (left sidebar) ===
+	-- tab sidebar
 	local tabListBg = make("Frame", {
 		Name = "TabListBg",
 		Position = UDim2.new(0, 0, 0, 46),
 		Size = UDim2.fromOffset(THEME.TabW, THEME.WinH - 46),
 		BackgroundColor3 = THEME.Panel,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
 		ZIndex = 11,
 	}, win)
 	corner(tabListBg)
-	make("Frame", { -- square right edge
+	make("Frame", {
 		Size = UDim2.new(0, 14, 1, 0), Position = UDim2.new(1, -14, 0, 0),
-		BackgroundColor3 = THEME.Panel, BackgroundTransparency = 0.1,
+		BackgroundColor3 = THEME.Panel, BackgroundTransparency = 0.15,
 		BorderSizePixel = 0, ZIndex = 11,
 	}, tabListBg)
-	local tabSep = make("Frame", {
+	make("Frame", {
 		Size = UDim2.new(0, 1, 1, -16),
 		Position = UDim2.new(1, -1, 0, 8),
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.7,
-		BorderSizePixel = 0,
-		ZIndex = 11,
+		BackgroundColor3 = WHITE, BackgroundTransparency = 0.7,
+		BorderSizePixel = 0, ZIndex = 11,
 	}, tabListBg)
 
 	local tabScroll = make("ScrollingFrame", {
@@ -560,7 +582,6 @@ function Window:_build()
 	}, tabScroll)
 	self.TabScroll = tabScroll
 
-	-- === CONTENT AREA ===
 	local content = make("Frame", {
 		Name = "Content",
 		Position = UDim2.fromOffset(THEME.TabW + 1, 46),
@@ -592,15 +613,147 @@ function Window:_build()
 		end
 	end)
 
-	-- keybind
 	table.insert(self.Connections, UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == self.Keybind then
 			self:Toggle(not self.Visible)
 		end
 	end))
 
-	-- fade in
 	tween(win, { BackgroundTransparency = 0 }, TweenInfo.new(0.3))
+end
+
+-- QUIT CONFIRM DIALOG
+function Window:_showQuitConfirm()
+	if self._confirmOpen then return end
+	self._confirmOpen = true
+
+	local overlayFrame = make("Frame", {
+		Name = "QuitConfirm",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = BLACK,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		ZIndex = 200,
+	}, self.Gui)
+	self._confirmFrame = overlayFrame
+
+	local dlg = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(360, 190),
+		BackgroundColor3 = THEME.Bg,
+		BorderSizePixel = 0,
+		ZIndex = 201,
+	}, overlayFrame)
+	corner(dlg, UDim.new(0, 12))
+	local dlgStroke = animatedStroke(dlg, 1.5, 0.15)
+
+	local icon = label({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 22),
+		Size = UDim2.new(1, 0, 0, 24),
+		Text = "⚠",
+		TextSize = 24,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = WHITE,
+		ZIndex = 202,
+	}, dlg)
+
+	label({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 56),
+		Size = UDim2.new(1, -40, 0, 20),
+		Text = "Quit StardustUI?",
+		Font = THEME.FontBold, TextSize = 17,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 202,
+	}, dlg)
+
+	label({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 82),
+		Size = UDim2.new(1, -50, 0, 40),
+		Text = "This will turn off everything and close the menu. Continue?",
+		TextSize = 12, TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = true,
+		ZIndex = 202,
+	}, dlg)
+
+	local function styledBtn(text, xPos, width, isPrimary)
+		local b = make("TextButton", {
+			Size = UDim2.fromOffset(width, 34),
+			Position = UDim2.new(0.5, xPos, 1, -54),
+			BackgroundColor3 = isPrimary and WHITE or THEME.Element,
+			Text = text,
+			TextColor3 = isPrimary and BLACK or WHITE,
+			Font = THEME.FontBold, TextSize = 13,
+			BorderSizePixel = 0, AutoButtonColor = false,
+			ZIndex = 202,
+		}, dlg)
+		corner(b, UDim.new(0, 6))
+		if not isPrimary then stroke(b, WHITE, 1, 0.6) end
+		b.MouseEnter:Connect(function()
+			if isPrimary then
+				tween(b, { BackgroundColor3 = Color3.fromRGB(230, 230, 230) })
+			else
+				tween(b, { BackgroundColor3 = WHITE, TextColor3 = BLACK })
+			end
+		end)
+		b.MouseLeave:Connect(function()
+			if isPrimary then
+				tween(b, { BackgroundColor3 = WHITE })
+			else
+				tween(b, { BackgroundColor3 = THEME.Element, TextColor3 = WHITE })
+			end
+		end)
+		return b
+	end
+
+	local cancelBtn = styledBtn("Cancel", -80, 150, false)
+	local confirmBtn = styledBtn("Confirm", 80, 150, true)
+
+	local function closeDialog()
+		if not self._confirmOpen then return end
+		self._confirmOpen = false
+		local info = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		TweenService:Create(overlayFrame, info, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(dlg, info, { Size = UDim2.fromOffset(320, 160), BackgroundTransparency = 1 }):Play()
+		task.delay(0.22, function()
+			if overlayFrame.Parent then overlayFrame:Destroy() end
+		end)
+		self._confirmFrame = nil
+	end
+
+	cancelBtn.MouseButton1Click:Connect(closeDialog)
+
+	confirmBtn.MouseButton1Click:Connect(function()
+		closeDialog()
+		-- turn off every toggle
+		for _, reset in ipairs(self._resetters) do
+			pcall(reset)
+		end
+		-- destroy
+		task.delay(0.15, function()
+			self:Destroy()
+			-- destroy entire ScreenGui if no other windows live
+			local remaining = 0
+			if StardustUI._windows then
+				for _, w in ipairs(StardustUI._windows) do
+					if not w.Destroyed then remaining += 1 end
+				end
+			end
+			if remaining == 0 and self.Gui and self.Gui.Parent then
+				self.Gui:Destroy()
+			end
+		end)
+	end)
+
+	-- fade in
+	overlayFrame.BackgroundTransparency = 1
+	dlg.BackgroundTransparency = 1
+	TweenService:Create(overlayFrame, TweenInfo.new(0.2), { BackgroundTransparency = 0.5 }):Play()
+	TweenService:Create(dlg, TweenInfo.new(0.2), { BackgroundTransparency = 0 }):Play()
 end
 
 function Window:Toggle(v)
@@ -614,6 +767,9 @@ function Window:Destroy()
 	self.Destroyed = true
 	for _, c in ipairs(self.Connections) do
 		if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
+	end
+	if self._confirmFrame and self._confirmFrame.Parent then
+		self._confirmFrame:Destroy()
 	end
 	if self.Frame then self.Frame:Destroy() end
 end
@@ -633,29 +789,25 @@ function Window:Tab(name)
 	local btn = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 34),
 		BackgroundColor3 = THEME.Element,
-		BackgroundTransparency = 0.5,
+		BackgroundTransparency = 0.4,
 		Text = "",
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		ZIndex = 13,
 	}, self.TabScroll)
 	corner(btn, UDim.new(0, 6))
-	local btnStroke, btnGrad = animatedStroke(btn, 1, 0.85)
-	tab.ButtonStroke = btnStroke
-	tab.ButtonGrad = btnGrad
+	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1, 0.8)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, btn)
 	local txt = label({
 		Size = UDim2.fromScale(1, 1),
 		Text = name,
 		TextColor3 = WHITE,
-		Font = THEME.FontBold,
-		TextSize = 13,
+		Font = THEME.FontBold, TextSize = 13,
 		ZIndex = 14,
 	}, btn)
 	tab.Button = btn
 	tab.ButtonText = txt
 
-	-- content holder
 	local holder = make("Frame", {
 		Name = "TabContent_" .. name,
 		Size = UDim2.fromScale(1, 1),
@@ -689,14 +841,12 @@ function Window:Tab(name)
 	}, scroll)
 	tab.Scroll = scroll
 
-	btn.MouseButton1Click:Connect(function()
-		self:SelectTab(tab)
-	end)
+	btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
 	btn.MouseEnter:Connect(function()
-		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.2 }) end
+		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.15 }) end
 	end)
 	btn.MouseLeave:Connect(function()
-		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.5 }) end
+		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.4 }) end
 	end)
 
 	table.insert(self.Tabs, tab)
@@ -708,15 +858,15 @@ function Window:SelectTab(tab)
 	if self.CurrentTab == tab then return end
 	if self.CurrentTab then
 		self.CurrentTab.Holder.Visible = false
-		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.5 })
+		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.4 })
 		self.CurrentTab.ButtonText.TextColor3 = WHITE
-		self.CurrentTab.ButtonStroke.Transparency = 0.85
+		self.CurrentTab.ButtonStroke.Transparency = 0.8
 	end
 	self.CurrentTab = tab
 	tab.Holder.Visible = true
 	tween(tab.Button, { BackgroundColor3 = WHITE, BackgroundTransparency = 0 })
 	tab.ButtonText.TextColor3 = BLACK
-	tab.ButtonStroke.Transparency = 0.2
+	tab.ButtonStroke.Transparency = 0.1
 end
 
 ---------------------------------------------------------------------
@@ -736,12 +886,12 @@ function Tab:Section(name)
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = THEME.Section,
-		BackgroundTransparency = 0.15,
+		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
 		ZIndex = 13,
 	}, self.Scroll)
 	corner(frame, UDim.new(0, 8))
-	sec.Stroke, sec.Grad = animatedStroke(frame, 1, 0.7)
+	sec.Stroke, sec.Grad = animatedStroke(frame, 1, 0.6)
 	make("UIPadding", {
 		PaddingTop = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 10),
@@ -762,10 +912,8 @@ function Tab:Section(name)
 	label({
 		Size = UDim2.new(1, 0, 1, 0),
 		Text = name:upper(),
-		Font = THEME.FontBold,
-		TextSize = 11,
-		TextColor3 = THEME.TextDim,
-		ZIndex = 13,
+		Font = THEME.FontBold, TextSize = 11,
+		TextColor3 = THEME.TextDim, ZIndex = 13,
 	}, header)
 
 	sec.Frame = frame
@@ -787,21 +935,17 @@ function Section:Button(text, callback)
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
 		Text = "",
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
+		BorderSizePixel = 0, AutoButtonColor = false,
 		LayoutOrder = self:_nextOrder(),
 		ZIndex = 13,
 	}, self.Frame)
 	corner(btn, UDim.new(0, 6))
-	stroke(btn, WHITE, 1, 0.8)
+	stroke(btn, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, btn)
 	local txt = label({
 		Size = UDim2.new(1, 0, 1, 0),
-		Text = text,
-		TextColor3 = WHITE,
-		Font = THEME.FontBold,
-		TextSize = 13,
-		ZIndex = 14,
+		Text = text, TextColor3 = WHITE,
+		Font = THEME.FontBold, TextSize = 13, ZIndex = 14,
 	}, btn)
 	btn.MouseEnter:Connect(function() tween(btn, { BackgroundColor3 = WHITE }); txt.TextColor3 = BLACK end)
 	btn.MouseLeave:Connect(function() tween(btn, { BackgroundColor3 = THEME.Element }); txt.TextColor3 = WHITE end)
@@ -822,6 +966,7 @@ end
 function Section:Toggle(text, default, callback)
 	default = default == true
 	local state = default
+
 	local holder = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
@@ -830,7 +975,7 @@ function Section:Toggle(text, default, callback)
 		ZIndex = 13,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	stroke(holder, WHITE, 1, 0.8)
+	stroke(holder, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
 	label({ Size = UDim2.new(1, -50, 1, 0), Text = text, TextSize = 13, ZIndex = 14 }, holder)
 
@@ -838,9 +983,7 @@ function Section:Toggle(text, default, callback)
 		Size = UDim2.fromOffset(36, 18),
 		Position = UDim2.new(1, -36, 0.5, -9),
 		BackgroundColor3 = state and WHITE or THEME.Section,
-		Text = "",
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
+		Text = "", BorderSizePixel = 0, AutoButtonColor = false,
 		ZIndex = 14,
 	}, holder)
 	corner(btn, UDim.new(1, 0))
@@ -849,24 +992,32 @@ function Section:Toggle(text, default, callback)
 		Size = UDim2.fromOffset(14, 14),
 		Position = state and UDim2.new(1, -15, 0.5, -7) or UDim2.fromOffset(2, 2),
 		BackgroundColor3 = state and BLACK or WHITE,
-		BorderSizePixel = 0,
-		ZIndex = 15,
+		BorderSizePixel = 0, ZIndex = 15,
 	}, btn)
 	corner(knob, UDim.new(1, 0))
-	local function apply(v)
+
+	local function apply(v, fire)
 		state = v
 		tween(btn, { BackgroundColor3 = state and WHITE or THEME.Section })
 		tween(knob, {
 			Position = state and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
 			BackgroundColor3 = state and BLACK or WHITE,
 		})
+		if fire and callback then
+			local ok, err = pcall(callback, state)
+			if not ok then warn("[StardustUI]", err) end
+		end
 	end
-	btn.MouseButton1Click:Connect(function()
-		apply(not state)
-		if callback then pcall(callback, state) end
+
+	btn.MouseButton1Click:Connect(function() apply(not state, true) end)
+
+	-- register reset for quit confirmation
+	table.insert(self.Tab.Window._resetters, function()
+		if state then apply(false, true) end
 	end)
+
 	return {
-		Set = function(_, v) apply(v) end,
+		Set = function(_, v) apply(v, false) end,
 		Get = function() return state end,
 		Destroy = function() holder:Destroy() end,
 	}
@@ -884,7 +1035,7 @@ function Section:Slider(text, min, max, default, callback)
 		ZIndex = 13,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	stroke(holder, WHITE, 1, 0.8)
+	stroke(holder, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, holder)
 	label({ Size = UDim2.new(1, -60, 0, 16), Text = text, TextSize = 13, ZIndex = 14 }, holder)
 	local valLabel = label({
@@ -893,20 +1044,16 @@ function Section:Slider(text, min, max, default, callback)
 		Text = tostring(value), TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right, Font = THEME.FontBold, ZIndex = 14,
 	}, holder)
-
 	local track = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 5),
 		Position = UDim2.new(0, 0, 0, 24),
 		BackgroundColor3 = THEME.Section,
-		BorderSizePixel = 0,
-		ZIndex = 14,
+		BorderSizePixel = 0, ZIndex = 14,
 	}, holder)
 	corner(track, UDim.new(1, 0))
 	local fill = make("Frame", {
 		Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		ZIndex = 14,
+		BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 14,
 	}, track)
 	corner(fill, UDim.new(1, 0))
 	local knob = make("Frame", {
@@ -917,7 +1064,6 @@ function Section:Slider(text, min, max, default, callback)
 	}, track)
 	corner(knob, UDim.new(1, 0))
 	stroke(knob, WHITE, 2, 0.6)
-
 	local dragging = false
 	local function updateFromX(x)
 		local abs, sz = track.AbsolutePosition, track.AbsoluteSize
@@ -969,20 +1115,17 @@ function Section:Textbox(text, default, callback)
 		ZIndex = 13,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	stroke(holder, WHITE, 1, 0.8)
+	stroke(holder, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
 	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 14 }, holder)
 	local box = make("TextBox", {
 		Size = UDim2.new(0.5, -8, 0, 22),
 		Position = UDim2.new(0.5, 4, 0.5, -11),
 		BackgroundColor3 = THEME.Section,
-		Text = default,
-		PlaceholderText = "type...",
-		TextColor3 = WHITE,
-		PlaceholderColor3 = THEME.TextMute,
+		Text = default, PlaceholderText = "type...",
+		TextColor3 = WHITE, PlaceholderColor3 = THEME.TextMute,
 		Font = THEME.Font, TextSize = 12,
-		BorderSizePixel = 0,
-		ClearTextOnFocus = false,
+		BorderSizePixel = 0, ClearTextOnFocus = false,
 		ZIndex = 14,
 	}, holder)
 	corner(box, UDim.new(0, 5))
@@ -1014,7 +1157,7 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 13,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	stroke(holder, WHITE, 1, 0.8)
+	stroke(holder, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
 	label({ Size = UDim2.new(0.5, 0, 0, 22), Text = text, TextSize = 13, ZIndex = 14 }, holder)
 	local current = label({
@@ -1027,8 +1170,7 @@ function Section:Dropdown(text, options, default, callback)
 	local list = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
 		Position = UDim2.new(0, 0, 0, 22),
-		BackgroundTransparency = 1,
-		ZIndex = 14,
+		BackgroundTransparency = 1, ZIndex = 14,
 	}, holder)
 	make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, list)
 	local items = {}
@@ -1039,8 +1181,7 @@ function Section:Dropdown(text, options, default, callback)
 			local it = make("TextButton", {
 				Size = UDim2.new(1, 0, 0, 22),
 				BackgroundColor3 = THEME.Section,
-				Text = opt,
-				TextColor3 = WHITE,
+				Text = opt, TextColor3 = WHITE,
 				Font = THEME.Font, TextSize = 12,
 				BorderSizePixel = 0, AutoButtonColor = false,
 				TextXAlignment = Enum.TextXAlignment.Left,
@@ -1087,15 +1228,14 @@ function Section:Keybind(text, default, callback)
 		ZIndex = 13,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
-	stroke(holder, WHITE, 1, 0.8)
+	stroke(holder, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
 	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 14 }, holder)
 	local btn = make("TextButton", {
 		Size = UDim2.new(0.5, -8, 0, 22),
 		Position = UDim2.new(0.5, 4, 0.5, -11),
 		BackgroundColor3 = THEME.Section,
-		Text = current.Name,
-		TextColor3 = WHITE,
+		Text = current.Name, TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 12,
 		BorderSizePixel = 0, AutoButtonColor = false,
 		ZIndex = 14,
@@ -1107,7 +1247,7 @@ function Section:Keybind(text, default, callback)
 		btn.Text = "..."
 		tween(btn, { BackgroundColor3 = WHITE, TextColor3 = BLACK })
 	end)
-	UserInputService.InputBegan:Connect(function(input, processed)
+	UserInputService.InputBegan:Connect(function(input)
 		if listening and input.UserInputType == Enum.UserInputType.Keyboard then
 			listening = false
 			current = input.KeyCode
@@ -1126,17 +1266,10 @@ end
 function Section:Label(text)
 	local l = label({
 		Size = UDim2.new(1, 0, 0, 20),
-		Text = text,
-		TextSize = 12,
-		TextColor3 = THEME.TextDim,
-		LayoutOrder = self:_nextOrder(),
-		TextWrapped = true,
-		ZIndex = 13,
+		Text = text, TextSize = 12, TextColor3 = THEME.TextDim,
+		LayoutOrder = self:_nextOrder(), TextWrapped = true, ZIndex = 13,
 	}, self.Frame)
-	return {
-		Set = function(_, t) l.Text = t end,
-		Destroy = function() l:Destroy() end,
-	}
+	return { Set = function(_, t) l.Text = t end, Destroy = function() l:Destroy() end }
 end
 
 function Section:Divider()
@@ -1149,31 +1282,6 @@ function Section:Divider()
 		ZIndex = 13,
 	}, self.Frame)
 	return { Destroy = function() d:Destroy() end }
-end
-
----------------------------------------------------------------------
--- GLOBAL ANIMATED STROKE UPDATER
----------------------------------------------------------------------
--- Sweep all animated gradients. Runs on the same shared Heartbeat as the stars.
-if not StardustUI._strokeRunning then
-	StardustUI._strokeRunning = true
-	StardustUI._strokes = {}
-	RunService.Heartbeat:Connect(function()
-		local t = os.clock()
-		for _, entry in ipairs(StardustUI._strokes) do
-			if entry.grad and entry.grad.Parent then
-				entry.grad.Rotation = (t * 80 + entry.offset) % 360
-			end
-		end
-	end)
-end
-
--- Register every animated stroke as it's created by patching animatedStroke
-local _origAnimatedStroke = animatedStroke
-animatedStroke = function(parent, thickness, baseTransparency)
-	local st, grad = _origAnimatedStroke(parent, thickness, baseTransparency)
-	table.insert(StardustUI._strokes, { grad = grad, offset = rng:NextNumber(0, 360) })
-	return st, grad
 end
 
 return StardustUI
