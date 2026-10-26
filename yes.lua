@@ -1,5 +1,5 @@
 --[[
-	StardustUI v5 — Floating Dropdowns, Super Transparent, Visible Border
+	StardustUI v6 — Expand Dropdowns, High Transparency, Polished Tabs
 ]]
 
 local StardustUI = {}
@@ -34,11 +34,11 @@ local THEME = {
 	WinH      = 460,
 	TabW      = 140,
 
-	-- VERY transparent so the star animation shines through
-	TrWindow  = 0.35,   
-	TrPanel   = 0.55,   
-	TrSection = 0.75,   
-	TrElement = 0.85,   
+	-- HIGHLY transparent so the star animation shows through everything
+	TrWindow  = 0.55,   
+	TrPanel   = 0.65,   
+	TrSection = 0.85,   
+	TrElement = 0.90,   
 }
 
 local WHITE = Color3.fromRGB(255, 255, 255)
@@ -418,11 +418,9 @@ function Window:_build()
 		ZIndex = 10,
 	}, self.Gui)
 	corner(win)
-	-- Animated border on the main window
 	self.WindowStroke, self.WindowGrad = animatedStroke(win, 2, 0.1)
 	self.Frame = win
 
-	-- The rest of the window needs clipping, so we put a clipping frame inside
 	local clipFrame = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -432,16 +430,14 @@ function Window:_build()
 	}, win)
 	corner(clipFrame)
 
-	-- night sky inside the window
 	local sky, skyUpdate = createNightSky(clipFrame)
 	self.Sky = sky
 	table.insert(self.Updaters, skyUpdate)
 
-	-- light veil so text stays readable
 	local veil = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Bg,
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.45, -- Lower means the window is a bit darker, 0.45 lets the stars shine.
 		BorderSizePixel = 0,
 		ZIndex = 12,
 	}, clipFrame)
@@ -641,7 +637,7 @@ function Window:_showQuitConfirm()
 	local dlgVeil = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Bg,
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.45,
 		BorderSizePixel = 0,
 		ZIndex = 203,
 	}, dlgClip)
@@ -1159,7 +1155,7 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- FIXED DROPDOWN (Floating Overlay so it never overlaps)
+-- REDESIGNED DROPDOWN (Pushes everything below it down. No overlap, no weird box icon)
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
@@ -1172,64 +1168,61 @@ function Section:Dropdown(text, options, default, callback)
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
 		LayoutOrder = self:_nextOrder(),
-		ZIndex = 20, -- High so the dropdown floats over other elements
+		ClipsDescendants = true, -- Clips the list so it emerges from inside
+		ZIndex = 15,
 	}, self.Frame)
 	corner(holder, UDim.new(0, 6))
 	animatedStroke(holder, 1.2, 0.55)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 10) }, holder)
-
-	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 21 }, holder)
-
-	local rightSide = make("Frame", {
-		Size = UDim2.new(0.5, -8, 1, 0),
-		Position = UDim2.new(0.5, 4, 0, 0),
-		BackgroundTransparency = 1,
-		ZIndex = 21,
+	
+	local layout = make("UIListLayout", {
+		Padding = UDim.new(0, 0),
+		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, holder)
+
+	-- The clickable header
+	local header = make("TextButton", {
+		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundTransparency = 1,
+		Text = "",
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		LayoutOrder = 1,
+		ZIndex = 16,
+	}, holder)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, header)
+	
+	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 17 }, header)
+	
 	local current = label({
-		Size = UDim2.new(1, -20, 1, 0),
+		Size = UDim2.new(0.5, 0, 1, 0),
+		Position = UDim2.new(0.5, 0, 0, 0),
 		Text = value, TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 21,
-	}, rightSide)
-	local chevron = label({
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.fromOffset(16, 16),
-		Text = "▾", TextSize = 12, TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 21,
-	}, rightSide)
+		ZIndex = 17,
+	}, header)
 
-	-- The overlay is parented directly to the ScreenGui, not the frame, so it can go over everything
-	local overlayContainer = make("Frame", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Visible = false,
-		ZIndex = 150,
-	}, self.Tab.Window.Gui)
-
-	local popover = make("Frame", {
-		Size = UDim2.new(0, 0, 0, 0),
-		BackgroundColor3 = THEME.Section,
-		BackgroundTransparency = 0.05,
+	-- A clean thin white underline indicator instead of the box
+	local indicator = make("Frame", {
+		Size = UDim2.new(0, 16, 0, 2),
+		Position = UDim2.new(1, 0, 1, -6),
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.5,
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
-		ZIndex = 151,
-	}, overlayContainer)
-	corner(popover, UDim.new(0, 6))
-	animatedStroke(popover, 1.2, 0.2)
-	make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) }, popover)
+		ZIndex = 17,
+	}, header)
+	corner(indicator, UDim.new(1, 0))
 
-	local itemHolder = make("Frame", {
-		Size = UDim2.fromScale(1, 1),
+	-- The list that appears below
+	local list = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
 		BackgroundTransparency = 1,
-		ZIndex = 152,
-	}, popover)
-	make("UIListLayout", {
-		Padding = UDim.new(0, 2),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, itemHolder)
+		BorderSizePixel = 0,
+		LayoutOrder = 2,
+		ZIndex = 16,
+	}, holder)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, list)
+	make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, list)
 
 	local items = {}
 	local function rebuild()
@@ -1238,24 +1231,25 @@ function Section:Dropdown(text, options, default, callback)
 		for i, opt in ipairs(options) do
 			local it = make("TextButton", {
 				Size = UDim2.new(1, 0, 0, 26),
-				BackgroundColor3 = THEME.Element,
-				BackgroundTransparency = 0.2,
+				BackgroundColor3 = THEME.Section,
+				BackgroundTransparency = 0.5,
 				Text = opt, TextColor3 = WHITE,
 				Font = THEME.Font, TextSize = 12,
 				BorderSizePixel = 0, AutoButtonColor = false,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				LayoutOrder = i, ZIndex = 153,
-			}, itemHolder)
+				LayoutOrder = i, ZIndex = 17,
+			}, list)
 			corner(it, UDim.new(0, 4))
 			make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, it)
 			it.MouseEnter:Connect(function() tween(it, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK }) end)
-			it.MouseLeave:Connect(function() tween(it, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.2, TextColor3 = WHITE }) end)
+			it.MouseLeave:Connect(function() tween(it, { BackgroundColor3 = THEME.Section, BackgroundTransparency = 0.5, TextColor3 = WHITE }) end)
 			it.MouseButton1Click:Connect(function()
 				value = opt
 				current.Text = opt
 				open = false
-				overlayContainer.Visible = false
-				tween(chevron, { Rotation = 0 })
+				-- Animate the holder back to 32px height
+				tween(holder, { Size = UDim2.new(1, 0, 0, 32) })
+				tween(indicator, { BackgroundTransparency = 0.5 })
 				if callback then pcall(callback, value) end
 			end)
 			items[#items + 1] = it
@@ -1263,42 +1257,16 @@ function Section:Dropdown(text, options, default, callback)
 	end
 	rebuild()
 
-	local function updatePos()
-		local abs = holder.AbsolutePosition
-		local sz = holder.AbsoluteSize
-		local h = #options * 28 + 8
-		popover.Position = UDim2.fromOffset(abs.X, abs.Y + sz.Y + 4)
-		popover.Size = UDim2.fromOffset(sz.X, h)
-	end
-
-	holder.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			open = not open
-			if open then
-				updatePos()
-				overlayContainer.Visible = true
-				tween(chevron, { Rotation = 180 })
-			else
-				overlayContainer.Visible = false
-				tween(chevron, { Rotation = 0 })
-			end
-		end
-	end)
-
-	-- click outside to close
-	UserInputService.InputBegan:Connect(function(input)
-		if open and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-			local px, py = input.Position.X, input.Position.Y
-			local hAbs = holder.AbsolutePosition
-			local hSz = holder.AbsoluteSize
-			local insideHolder = px >= hAbs.X and px <= hAbs.X + hSz.X and py >= hAbs.Y and py <= hAbs.Y + hSz.Y
-			local insidePopover = px >= popover.AbsolutePosition.X and px <= popover.AbsolutePosition.X + popover.AbsoluteSize.X and
-				py >= popover.AbsolutePosition.Y and py <= popover.AbsolutePosition.Y + popover.AbsoluteSize.Y
-			if not insideHolder and not insidePopover then
-				open = false
-				overlayContainer.Visible = false
-				tween(chevron, { Rotation = 0 })
-			end
+	header.MouseButton1Click:Connect(function()
+		open = not open
+		if open then
+			-- Calculate total height: 32 (header) + padding (4) + items
+			local h = 32 + 4 + (#options * 28)
+			tween(holder, { Size = UDim2.new(1, 0, 0, h) })
+			tween(indicator, { BackgroundTransparency = 0 })
+		else
+			tween(holder, { Size = UDim2.new(1, 0, 0, 32) })
+			tween(indicator, { BackgroundTransparency = 0.5 })
 		end
 	end)
 
@@ -1306,7 +1274,7 @@ function Section:Dropdown(text, options, default, callback)
 		Set = function(_, v) value = v; current.Text = v end,
 		Get = function() return value end,
 		SetOptions = function(_, o) options = o; rebuild() end,
-		Destroy = function() holder:Destroy(); overlayContainer:Destroy() end,
+		Destroy = function() holder:Destroy() end,
 	}
 end
 
