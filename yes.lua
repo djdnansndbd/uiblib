@@ -415,6 +415,7 @@ end
 ---------------------------------------------------------------------
 -- STROKE TICKER
 ---------------------------------------------------------------------
+local activeNotification, showNextNotification, removeNotification
 StardustUI._notificationEffects = StardustUI._notificationEffects or {}
 if not StardustUI._strokeRunning then
 	StardustUI._strokeRunning = true
@@ -432,6 +433,16 @@ if not StardustUI._strokeRunning then
 				table.remove(StardustUI._notificationEffects, i)
 			else
 				effect.Update(dt)
+			end
+		end
+		if activeNotification and activeNotification.Item then
+			local item = activeNotification.Item
+			if not item.Closed and item.Duration > 0 and not item.Hovered then
+				item.Remaining = math.max(0, item.Remaining - dt)
+				item.Progress.Size = UDim2.new(item.Remaining / item.Duration, 0, 0, 2)
+				if item.Remaining <= 0 then
+					removeNotification(item)
+				end
 			end
 		end
 	end)
@@ -465,6 +476,7 @@ make("UIListLayout", {
 }, notificationRoot)
 
 local notificationItems = {}
+local notificationQueue = {}
 local notificationOrder = 0
 local notificationKinds = {
 	info = { label = "INFO", color = THEME.TextDim },
@@ -482,7 +494,7 @@ local function makeNotificationStarfield(parent)
 	return effect
 end
 
-local function removeNotification(item)
+removeNotification = function(item)
 	if item.Closed then return end
 	item.Closed = true
 	for i, active in ipairs(notificationItems) do
@@ -498,19 +510,22 @@ local function removeNotification(item)
 		end
 	end
 	if item.Frame.Parent then item.Frame:Destroy() end
+	if activeNotification and activeNotification.Item == item then
+		activeNotification.Item = nil
+		activeNotification = nil
+		if showNextNotification then
+			task.defer(showNextNotification)
+		end
+	end
 end
 
-function StardustUI.Notify(title, message, duration, kind)
+local function createNotification(title, message, duration, kind, request)
 	title = tostring(title or "Notification")
 	message = tostring(message or "")
 	duration = tonumber(duration) or 5
 	kind = string.lower(tostring(kind or "info"))
 	local style = notificationKinds[kind] or notificationKinds.info
 	duration = math.max(0, duration)
-
-	while #notificationItems >= 5 do
-		removeNotification(notificationItems[1])
-	end
 
 	notificationOrder += 1
 	local frame = make("Frame", {
@@ -669,28 +684,71 @@ function StardustUI.Notify(title, message, duration, kind)
 		Badge = badge,
 		Stroke = frameStroke,
 		Effect = effect,
+		Progress = progress,
+		Duration = duration,
+		Remaining = duration,
+		Hovered = false,
 		Closed = false,
 	}
+	request.Item = item
+	request.Handle.Frame = frame
 	table.insert(notificationItems, item)
+	frame.MouseEnter:Connect(function()
+		item.Hovered = true
+	end)
+	frame.MouseLeave:Connect(function()
+		item.Hovered = false
+	end)
 	closeButton.Activated:Connect(function()
 		removeNotification(item)
 	end)
 
 	if duration > 0 then
-		TweenService:Create(progress, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
-			Size = UDim2.new(0, 0, 0, 2),
-		}):Play()
-		task.delay(duration, function()
-			removeNotification(item)
-		end)
+		progress.Size = UDim2.new(1, 0, 0, 2)
 	end
+end
 
-	return {
-		Dismiss = function()
-			removeNotification(item)
-		end,
-		Frame = frame,
+showNextNotification = function()
+	if activeNotification then return end
+	while #notificationQueue > 0 do
+		local request = table.remove(notificationQueue, 1)
+		if not request.Cancelled then
+			activeNotification = request
+			createNotification(request.Title, request.Message, request.Duration, request.Kind, request)
+			return
+		end
+	end
+end
+
+function StardustUI.Notify(title, message, duration, kind)
+	local request = {
+		Title = tostring(title or "Notification"),
+		Message = tostring(message or ""),
+		Duration = math.max(0, tonumber(duration) or 5),
+		Kind = string.lower(tostring(kind or "info")),
+		Cancelled = false,
 	}
+	request.Handle = {
+		Dismiss = function()
+			if request.Cancelled then return end
+			request.Cancelled = true
+			if request.Item then
+				removeNotification(request.Item)
+			end
+		end,
+	}
+	table.insert(notificationQueue, request)
+	showNextNotification()
+	return request.Handle
+end
+
+function StardustUI.DismissAll()
+	table.clear(notificationQueue)
+	if activeNotification and activeNotification.Item then
+		removeNotification(activeNotification.Item)
+	else
+		activeNotification = nil
+	end
 end
 
 ---------------------------------------------------------------------
@@ -823,6 +881,10 @@ end
 
 function Window:Notify(title, message, duration, kind)
 	return StardustUI.Notify(title, message, duration, kind)
+end
+
+function Window:DismissAll()
+	return StardustUI.DismissAll()
 end
 
 function Window:_register(key, getFn, setFn)
@@ -1304,11 +1366,12 @@ end
 local Tab = {}
 Tab.__index = Tab
 
-function Window:Tab(name)
+function Window:Tab(name, icon)
 	local tab = setmetatable({}, Tab)
 	tab.Name = name
 	tab.Window = self
 	tab.Sections = {}
+	tab.Icon = icon
 
 	local btn = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 32),
@@ -1320,13 +1383,37 @@ function Window:Tab(name)
 	}, self.TabScroll)
 	corner(btn, UDim.new(0, 6))
 	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.85)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 12) }, btn)
+	make("UIPadding", { PaddingLeft = UDim.new(0, icon and 36 or 12) }, btn)
+	if icon then
+		local iconText = tostring(icon)
+		if type(icon) == "number" or iconText:match("^rbxassetid://") then
+			make("ImageLabel", {
+				Size = UDim2.fromOffset(18, 18),
+				Position = UDim2.fromOffset(10, 7),
+				BackgroundTransparency = 1,
+				Image = type(icon) == "number" and ("rbxassetid://" .. iconText) or iconText,
+				ImageColor3 = WHITE,
+				ZIndex = 16,
+			}, btn)
+		else
+			label({
+				Size = UDim2.fromOffset(20, 22),
+				Position = UDim2.fromOffset(8, 5),
+				Text = iconText,
+				TextColor3 = THEME.TextDim,
+				TextSize = 15,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				ZIndex = 16,
+			}, btn)
+		end
+	end
 
 	local txt = label({
 		Size = UDim2.fromScale(1, 1),
 		Text = name,
 		TextColor3 = THEME.TextDim,
 		Font = THEME.FontBold, TextSize = 13,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 16,
 	}, btn)
 	tab.Button = btn
@@ -1435,15 +1522,51 @@ function Tab:Section(name)
 		LayoutOrder = 0,
 		ZIndex = 15,
 	}, frame)
-	label({
-		Size = UDim2.new(1, 0, 1, 0),
+	local headerLabel = label({
+		Size = UDim2.new(1, -24, 1, 0),
 		Text = name:upper(),
 		Font = THEME.FontBold, TextSize = 11,
 		TextColor3 = THEME.TextDim, ZIndex = 16,
 	}, header)
+	local collapseIndicator = label({
+		Size = UDim2.fromOffset(18, 18),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		Text = "−",
+		TextColor3 = THEME.TextMute,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 17,
+	}, header)
+	local collapseButton = make("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+		ZIndex = 18,
+	}, header)
+
+	sec.Collapsed = false
+	function sec:SetCollapsed(collapsed)
+		self.Collapsed = collapsed == true
+		for _, child in ipairs(frame:GetChildren()) do
+			if child:IsA("GuiObject") and child ~= header then
+				child.Visible = not self.Collapsed
+			end
+		end
+		collapseIndicator.Text = self.Collapsed and "+" or "−"
+	end
+	function sec:ToggleCollapse()
+		self:SetCollapsed(not self.Collapsed)
+	end
+	collapseButton.Activated:Connect(function()
+		sec:ToggleCollapse()
+	end)
 
 	sec.Frame = frame
 	sec.Header = header
+	sec.HeaderLabel = headerLabel
+	sec.CollapseButton = collapseButton
 	table.insert(self.Sections, sec)
 	return sec
 end
@@ -1786,6 +1909,270 @@ function Section:Textbox(text, default, callback, configKey)
 		Set = function(_, t) box.Text = t end,
 		Get = function() return box.Text end,
 		Destroy = function() holder:Destroy() end,
+	}
+end
+
+function Section:MultiDropdown(text, options, default, callback, configKey)
+	options = options or {}
+	local selected = {}
+	local open = false
+	local rows = {}
+	local keyConn
+
+	local function applyValues(values)
+		selected = {}
+		if values == nil then
+			for _, option in ipairs(options) do
+				selected[tostring(option)] = true
+			end
+		else
+			for _, value in ipairs(values) do
+				selected[tostring(value)] = true
+			end
+		end
+	end
+	applyValues(default)
+
+	local container = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = THEME.TrElement,
+		BorderSizePixel = 0,
+		LayoutOrder = self:_nextOrder(),
+		ZIndex = 15,
+		AutomaticSize = Enum.AutomaticSize.Y,
+	}, self.Frame)
+	corner(container, UDim.new(0, 6))
+	local outline = animatedStroke(container, 1.2, 0.55)
+	make("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, container)
+
+	local header = make("TextButton", {
+		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundTransparency = 1,
+		Text = "",
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		LayoutOrder = 1,
+		ZIndex = 16,
+	}, container)
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, header)
+	label({
+		Size = UDim2.new(0.52, 0, 1, 0),
+		Text = text,
+		TextSize = 13,
+		ZIndex = 17,
+	}, header)
+
+	local summary = label({
+		Size = UDim2.new(0.48, -20, 1, 0),
+		Position = UDim2.new(0.52, 0, 0, 0),
+		Text = "",
+		TextSize = 11,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 17,
+	}, header)
+	label({
+		Size = UDim2.fromOffset(16, 16),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -2, 0.5, 0),
+		Text = "+",
+		TextSize = 16,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 17,
+	}, header)
+
+	local listFrame = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		LayoutOrder = 2,
+		ZIndex = 16,
+		AutomaticSize = Enum.AutomaticSize.Y,
+	}, container)
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 6),
+	}, listFrame)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 2),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, listFrame)
+
+	local selectAllButton = make("TextButton", {
+		Size = UDim2.new(1, 0, 0, 26),
+		BackgroundColor3 = THEME.Section,
+		BackgroundTransparency = 0.25,
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 11,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		LayoutOrder = 0,
+		ZIndex = 17,
+	}, listFrame)
+	corner(selectAllButton, UDim.new(0, 4))
+
+	local function getValues()
+		local values = {}
+		for _, option in ipairs(options) do
+			if selected[tostring(option)] then
+				values[#values + 1] = option
+			end
+		end
+		return values
+	end
+
+	local function updateRows()
+		local count = 0
+		for _, option in ipairs(options) do
+			if selected[tostring(option)] then
+				count += 1
+			end
+		end
+		local allSelected = #options > 0 and count == #options
+		summary.Text = allSelected and "All selected" or (count == 0 and "None" or tostring(count) .. " selected")
+		selectAllButton.Text = allSelected and "Deselect all" or "Select all"
+		for _, row in ipairs(rows) do
+			local isSelected = selected[row.Value] == true
+			row.Button.Text = (isSelected and "[x]  " or "[ ]  ") .. row.Value
+			row.Button.TextColor3 = isSelected and WHITE or THEME.TextDim
+		end
+	end
+
+	local function notifyChanged()
+		local values = getValues()
+		if callback then
+			local ok, err = pcall(callback, values)
+			if not ok then warn("[StardustUI]", err) end
+		end
+		if self.Tab.Window.AutoSave then
+			self.Tab.Window:SaveConfig()
+		end
+	end
+
+	local function rebuild()
+		for _, row in ipairs(rows) do
+			row.Button:Destroy()
+		end
+		rows = {}
+		for _, option in ipairs(options) do
+			local value = tostring(option)
+			local button = make("TextButton", {
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundColor3 = THEME.Section,
+				BackgroundTransparency = 0.5,
+				TextColor3 = WHITE,
+				Font = THEME.Font,
+				TextSize = 12,
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				LayoutOrder = #rows + 1,
+				ZIndex = 17,
+			}, listFrame)
+			corner(button, UDim.new(0, 4))
+			make("UIPadding", {
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 10),
+			}, button)
+			local row = { Value = value, Button = button }
+			rows[#rows + 1] = row
+			button.Activated:Connect(function()
+				selected[value] = not selected[value] or nil
+				updateRows()
+				notifyChanged()
+			end)
+		end
+		updateRows()
+	end
+	rebuild()
+
+	local function close()
+		if not open then return end
+		open = false
+		listFrame.Visible = false
+		if keyConn then
+			keyConn:Disconnect()
+			keyConn = nil
+		end
+		if StardustUI._closeActiveDropdown == close then
+			StardustUI._closeActiveDropdown = nil
+		end
+	end
+
+	local function openDropdown()
+		if open then return end
+		if StardustUI._closeActiveDropdown then
+			StardustUI._closeActiveDropdown()
+		end
+		open = true
+		listFrame.Visible = true
+		StardustUI._closeActiveDropdown = close
+		keyConn = UserInputService.InputBegan:Connect(function(input, processed)
+			if not processed and input.KeyCode == Enum.KeyCode.Escape then
+				close()
+			end
+		end)
+	end
+
+	selectAllButton.Activated:Connect(function()
+		local allSelected = #options > 0
+		for _, option in ipairs(options) do
+			if not selected[tostring(option)] then
+				allSelected = false
+				break
+			end
+		end
+		applyValues(allSelected and {} or nil)
+		updateRows()
+		notifyChanged()
+	end)
+	header.Activated:Connect(function()
+		if open then close() else openDropdown() end
+	end)
+	container.MouseEnter:Connect(function()
+		if not open then
+			tween(outline, { Transparency = 0.2 }, THEME.AnimFast)
+		end
+	end)
+	container.MouseLeave:Connect(function()
+		if not open then
+			tween(outline, { Transparency = 0.55 }, THEME.AnimFast)
+		end
+	end)
+
+	self.Tab.Window:_register(configKey, getValues, function(values)
+		applyValues(type(values) == "table" and values or {})
+		updateRows()
+	end)
+
+	return {
+		Get = getValues,
+		Set = function(_, values)
+			applyValues(type(values) == "table" and values or {})
+			updateRows()
+			notifyChanged()
+		end,
+		SetOptions = function(_, newOptions)
+			options = newOptions or {}
+			applyValues(nil)
+			rebuild()
+		end,
+		Destroy = function()
+			if open then close() end
+			container:Destroy()
+		end,
 	}
 end
 
