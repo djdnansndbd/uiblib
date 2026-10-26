@@ -1,9 +1,12 @@
 --[[
-	StardustUI v19 — Final Dropdown Fixes, correct +/- and full highlighting
+	StardustUI v19.1 — Clean release
+	• Dropdown: fixed +/- clipping, full-width highlight, AutomaticSize push layout
+	• Exclusive open (only one dropdown open at a time)
+	• Keyboard navigation (↑/↓, Enter, Esc)
+	• Search filter when options ≥ 8
 ]]
 
 local StardustUI = {}
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -12,8 +15,10 @@ local Stats = game:GetService("Stats")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-
 local rng = Random.new()
+
+-- Global reference so only one dropdown can be open
+StardustUI._closeActiveDropdown = nil
 
 ---------------------------------------------------------------------
 -- THEME
@@ -35,16 +40,14 @@ local THEME = {
 	WinW      = 580,
 	WinH      = 460,
 	TabW      = 140,
-
-	TrWindow  = 0.55,   
-	TrPanel   = 0.65,   
-	TrSection = 0.85,   
-	TrElement = 0.90,   
+	TrWindow  = 0.55,
+	TrPanel   = 0.65,
+	TrSection = 0.85,
+	TrElement = 0.90,
 }
 
 local WHITE = Color3.fromRGB(255, 255, 255)
 local BLACK = Color3.fromRGB(0, 0, 0)
-
 local FADE_ENDS = NumberSequence.new({
 	NumberSequenceKeypoint.new(0, 1),
 	NumberSequenceKeypoint.new(0.5, 0),
@@ -79,8 +82,8 @@ local function animatedStroke(parent, thickness, baseTransparency)
 		Transparency = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, 0.85),
 			NumberSequenceKeypoint.new(0.3, 0.8),
-			NumberSequenceKeypoint.new(0.45, 0),    
-			NumberSequenceKeypoint.new(0.55, 0),    
+			NumberSequenceKeypoint.new(0.45, 0),
+			NumberSequenceKeypoint.new(0.55, 0),
 			NumberSequenceKeypoint.new(0.7, 0.8),
 			NumberSequenceKeypoint.new(1, 0.85),
 		}),
@@ -244,7 +247,6 @@ local function createNightSky(parent)
 
 	local shooters = {}
 	local nextShooter = 0.4
-
 	local function spawnShooter()
 		local W = sky.AbsoluteSize.X
 		if W < 50 then return end
@@ -329,6 +331,7 @@ local function createNightSky(parent)
 			spawnShooter()
 			nextShooter = elapsed + rng:NextNumber(1.2, 2.8)
 		end
+
 		for i = #shooters, 1, -1 do
 			local s = shooters[i]
 			s.age += dt
@@ -427,7 +430,7 @@ function Window:_build()
 		BackgroundTransparency = THEME.TrWindow,
 		BorderSizePixel = 0,
 		Active = true,
-		ClipsDescendants = true, 
+		ClipsDescendants = true,
 		ZIndex = 10,
 	}, self.Gui)
 	corner(win)
@@ -450,7 +453,7 @@ function Window:_build()
 	local veil = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Bg,
-		BackgroundTransparency = 0.45, 
+		BackgroundTransparency = 0.45,
 		BorderSizePixel = 0,
 		ZIndex = 12,
 	}, clipFrame)
@@ -539,7 +542,7 @@ function Window:_build()
 		BorderSizePixel = 0, ZIndex = 13,
 	}, tabListBg)
 	make("Frame", {
-		Size = UDim2.new(0, 1, 1, -80), 
+		Size = UDim2.new(0, 1, 1, -80),
 		Position = UDim2.new(1, -1, 0, 8),
 		BackgroundColor3 = WHITE, BackgroundTransparency = 0.7,
 		BorderSizePixel = 0, ZIndex = 13,
@@ -548,7 +551,7 @@ function Window:_build()
 	local tabScroll = make("ScrollingFrame", {
 		Name = "TabScroll",
 		Position = UDim2.fromOffset(0, 0),
-		Size = UDim2.new(1, 0, 1, -76), 
+		Size = UDim2.new(1, 0, 1, -76),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 2,
@@ -612,14 +615,14 @@ function Window:_build()
 		Size = UDim2.new(1, -50, 0, 14),
 		Position = UDim2.fromOffset(46, 10),
 		Text = player.DisplayName,
-		Font = THEME.FontBold, 
+		Font = THEME.FontBold,
 		TextSize = 13,
-		TextScaled = true, 
+		TextScaled = true,
 		TextWrapped = false,
 		ZIndex = 15,
 	}, userProfile)
 	make("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 7 }, nameLbl)
-	
+
 	make("Frame", {
 		Size = UDim2.new(1, -50, 0, 1),
 		Position = UDim2.new(0, 46, 0, 25),
@@ -719,7 +722,7 @@ function Window:_showQuitConfirm()
 		BackgroundColor3 = THEME.Bg,
 		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
-		ClipsDescendants = false, 
+		ClipsDescendants = false,
 		ZIndex = 201,
 	}, overlayFrame)
 	corner(dlg, UDim.new(0, 12))
@@ -756,7 +759,6 @@ function Window:_showQuitConfirm()
 		TextColor3 = WHITE,
 		ZIndex = 204,
 	}, dlgClip)
-
 	label({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 60),
@@ -766,7 +768,6 @@ function Window:_showQuitConfirm()
 		TextXAlignment = Enum.TextXAlignment.Center,
 		ZIndex = 204,
 	}, dlgClip)
-
 	label({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 88),
@@ -909,6 +910,7 @@ function Window:Tab(name)
 	corner(btn, UDim.new(0, 6))
 	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.85)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12) }, btn)
+
 	local txt = label({
 		Size = UDim2.fromScale(1, 1),
 		Text = name,
@@ -953,7 +955,7 @@ function Window:Tab(name)
 	tab.Scroll = scroll
 
 	btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
-	
+
 	applyHoverEffect(btn, function() return self.CurrentTab == tab end, THEME.Element, Color3.fromRGB(85, 85, 98), 0.7, 0.5, tab.ButtonStroke, 0.85, 0.4)
 	btn.MouseEnter:Connect(function()
 		if self.CurrentTab ~= tab then tween(txt, { TextColor3 = WHITE }, THEME.AnimFast) end
@@ -1082,14 +1084,14 @@ function Section:Card(title, avatarUrl, fields)
 			BackgroundTransparency = 1,
 			ZIndex = 16,
 		}, card)
-		
+
 		label({
 			Size = UDim2.new(0.35, 0, 1, 0),
 			Text = field[1] .. ":",
 			TextSize = 11, TextColor3 = THEME.TextDim,
 			ZIndex = 16,
 		}, row)
-		
+
 		label({
 			Size = UDim2.new(0.65, 0, 1, 0),
 			Position = UDim2.new(0.35, 0, 0, 0),
@@ -1099,12 +1101,11 @@ function Section:Card(title, avatarUrl, fields)
 			TextXAlignment = Enum.TextXAlignment.Right,
 			ZIndex = 16,
 		}, row)
-		
+
 		yOffset += 16
 	end
 
 	applyHoverEffect(card, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
-
 	return {
 		Destroy = function() card:Destroy() end,
 	}
@@ -1126,16 +1127,16 @@ function Section:Button(text, callback)
 	corner(btn, UDim.new(0, 6))
 	local st = animatedStroke(btn, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, btn)
-	
+
 	local txt = label({
 		Size = UDim2.new(1, 0, 1, 0),
 		Text = text, TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 13, ZIndex = 16,
 	}, btn)
-	
+
 	applyHoverEffect(btn, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	btn.MouseEnter:Connect(function() tween(txt, { TextColor3 = WHITE }) end)
-	
+
 	btn.MouseButton1Click:Connect(function()
 		ripple(btn, btn.AbsoluteSize.X / 2, btn.AbsoluteSize.Y / 2)
 		if callback then
@@ -1165,6 +1166,7 @@ function Section:Toggle(text, default, callback)
 	corner(holder, UDim.new(0, 6))
 	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
+
 	label({ Size = UDim2.new(1, -50, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 
 	local btn = make("TextButton", {
@@ -1177,6 +1179,7 @@ function Section:Toggle(text, default, callback)
 	}, holder)
 	corner(btn, UDim.new(1, 0))
 	stroke(btn, WHITE, 1, 0.5)
+
 	local knob = make("Frame", {
 		Size = UDim2.fromOffset(14, 14),
 		Position = state and UDim2.new(1, -15, 0.5, -7) or UDim2.fromOffset(2, 2),
@@ -1201,6 +1204,7 @@ function Section:Toggle(text, default, callback)
 	end
 
 	btn.MouseButton1Click:Connect(function() apply(not state, true) end)
+
 	table.insert(self.Tab.Window._resetters, function()
 		if state then apply(false, true) end
 	end)
@@ -1216,6 +1220,7 @@ function Section:Slider(text, min, max, default, callback)
 	min, max = min or 0, max or 100
 	default = math.clamp(default or min, min, max)
 	local value = default
+
 	local holder = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 46),
 		BackgroundColor3 = THEME.Element,
@@ -1227,6 +1232,7 @@ function Section:Slider(text, min, max, default, callback)
 	corner(holder, UDim.new(0, 6))
 	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, holder)
+
 	label({ Size = UDim2.new(1, -60, 0, 16), Text = text, TextSize = 13, ZIndex = 16 }, holder)
 	local valLabel = label({
 		Size = UDim2.new(0, 60, 0, 16),
@@ -1234,6 +1240,7 @@ function Section:Slider(text, min, max, default, callback)
 		Text = tostring(value), TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right, Font = THEME.FontBold, ZIndex = 16,
 	}, holder)
+
 	local track = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 5),
 		Position = UDim2.new(0, 0, 0, 24),
@@ -1242,11 +1249,13 @@ function Section:Slider(text, min, max, default, callback)
 		BorderSizePixel = 0, ZIndex = 16,
 	}, holder)
 	corner(track, UDim.new(1, 0))
+
 	local fill = make("Frame", {
 		Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
 		BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 16,
 	}, track)
 	corner(fill, UDim.new(1, 0))
+
 	local knob = make("Frame", {
 		Size = UDim2.fromOffset(12, 12),
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1255,7 +1264,7 @@ function Section:Slider(text, min, max, default, callback)
 	}, track)
 	corner(knob, UDim.new(1, 0))
 	stroke(knob, WHITE, 2, 0.6)
-	
+
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 
 	local dragging = false
@@ -1269,6 +1278,7 @@ function Section:Slider(text, min, max, default, callback)
 		valLabel.Text = tostring(value)
 		if callback then pcall(callback, value) end
 	end
+
 	track.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
@@ -1285,6 +1295,7 @@ function Section:Slider(text, min, max, default, callback)
 			dragging = false
 		end
 	end)
+
 	return {
 		Set = function(_, v)
 			v = math.clamp(v, min, max)
@@ -1312,7 +1323,9 @@ function Section:Textbox(text, default, callback)
 	corner(holder, UDim.new(0, 6))
 	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
+
 	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
+
 	local box = make("TextBox", {
 		Size = UDim2.new(0.5, -8, 0, 22),
 		Position = UDim2.new(0.5, 4, 0.5, -11),
@@ -1327,14 +1340,15 @@ function Section:Textbox(text, default, callback)
 	corner(box, UDim.new(0, 5))
 	stroke(box, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, box)
-	
+
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
-	
+
 	box.Focused:Connect(function() tween(box, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK }) end)
 	box.FocusLost:Connect(function(enter)
 		tween(box, { BackgroundColor3 = THEME.Section, BackgroundTransparency = 0.2, TextColor3 = WHITE })
 		if callback then pcall(callback, box.Text, enter) end
 	end)
+
 	return {
 		Set = function(_, t) box.Text = t end,
 		Get = function() return box.Text end,
@@ -1342,13 +1356,22 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- FIXED DROPDOWN
+-- ============================================================
+-- DROPDOWN  (v19.1 — fixed clipping, full highlight, polish)
+-- ============================================================
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
 	local value = default
 	local open = false
+	local selectedIdx = 1
+	local filterText = ""
+	local items = {}
+	local searchBox = nil
+	local keyConn = nil
+	local useSearch = #options >= 8
 
+	-- Outer container: AutomaticSize so the list pushes content below
 	local container = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
@@ -1357,47 +1380,61 @@ function Section:Dropdown(text, options, default, callback)
 		LayoutOrder = self:_nextOrder(),
 		ZIndex = 15,
 		AutomaticSize = Enum.AutomaticSize.Y,
+		ClipsDescendants = false,
 	}, self.Frame)
 	corner(container, UDim.new(0, 6))
 	local st = animatedStroke(container, 1.2, 0.55)
-	-- No UIPadding on the container, so the list can touch the edges and highlight fully
+
 	make("UIListLayout", {
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, container)
 
+	-- Header (clickable area)
 	local header = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 32),
-		BackgroundTransparency = 1, -- Let the hover effect handle the background
+		BackgroundTransparency = 1,
 		Text = "",
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		LayoutOrder = 1,
 		ZIndex = 16,
 	}, container)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, header)
-	
-	label({ Size = UDim2.new(0.6, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 17 }, header)
-	
-	local current = label({
-		Size = UDim2.new(0.4, -24, 1, 0),
-		Position = UDim2.new(0.6, 0, 0, 0),
-		Text = value, TextSize = 12, TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Right,
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, header)
+
+	label({
+		Size = UDim2.new(0.55, 0, 1, 0),
+		Text = text,
+		TextSize = 13,
 		ZIndex = 17,
 	}, header)
-	
-	-- The + / - Indicator safely inside the header
-	local indicator = label({
-		Size = UDim2.fromOffset(20, 20),
-		Position = UDim2.new(1, 0, 0.5, -10),
-		Text = "+",
-		TextSize = 18, TextColor3 = THEME.TextDim,
+
+	local current = label({
+		Size = UDim2.new(0.45, -20, 1, 0),
+		Position = UDim2.new(0.55, 0, 0, 0),
+		Text = tostring(value),
+		TextSize = 12,
+		TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 17,
 	}, header)
 
-	-- The list that expands downwards
+	-- Indicator fully inside (AnchorPoint + negative offset = no clipping)
+	local indicator = label({
+		Size = UDim2.fromOffset(16, 16),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -2, 0.5, 0),
+		Text = "+",
+		TextSize = 16,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 17,
+	}, header)
+
+	-- Expandable list
 	local listFrame = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
 		BackgroundTransparency = 1,
@@ -1405,74 +1442,266 @@ function Section:Dropdown(text, options, default, callback)
 		Visible = false,
 		LayoutOrder = 2,
 		ZIndex = 16,
+		AutomaticSize = Enum.AutomaticSize.Y,
 	}, container)
-	-- Padding inside the list itself so buttons highlight fully
-	make("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, listFrame)
-	make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, listFrame)
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 6),
+	}, listFrame)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 2),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, listFrame)
 
-	local items = {}
+	-- Hover helpers for the closed container
+	local baseCol, hoverCol = THEME.Element, Color3.fromRGB(85, 85, 98)
+	local baseTr, hoverTr = THEME.TrElement, 0.6
+	local function setContainerHover(isHover)
+		if open then return end
+		tween(container, {
+			BackgroundColor3 = isHover and hoverCol or baseCol,
+			BackgroundTransparency = isHover and hoverTr or baseTr,
+		}, THEME.AnimFast)
+		tween(st, { Transparency = isHover and 0.2 or 0.55 }, THEME.AnimFast)
+	end
+
+	local function getVisibleItems()
+		local vis = {}
+		for _, it in ipairs(items) do
+			if it.Visible then
+				vis[#vis + 1] = it
+			end
+		end
+		return vis
+	end
+
+	local function updateHighlight()
+		local vis = getVisibleItems()
+		selectedIdx = math.clamp(selectedIdx, 1, math.max(1, #vis))
+		for _, it in ipairs(items) do
+			local isSel = false
+			for j, v in ipairs(vis) do
+				if v == it and j == selectedIdx then
+					isSel = true
+					break
+				end
+			end
+			if isSel then
+				it.BackgroundColor3 = WHITE
+				it.BackgroundTransparency = 0
+				it.TextColor3 = BLACK
+			else
+				it.BackgroundColor3 = THEME.Section
+				it.BackgroundTransparency = 0.5
+				it.TextColor3 = WHITE
+			end
+		end
+	end
+
+	local function applyFilter()
+		local q = filterText:lower()
+		for _, it in ipairs(items) do
+			it.Visible = (q == "" or it.Text:lower():find(q, 1, true) ~= nil)
+		end
+		selectedIdx = 1
+		updateHighlight()
+	end
+
+	local function close()
+		if not open then return end
+		open = false
+		listFrame.Visible = false
+		indicator.Text = "+"
+		tween(indicator, { TextColor3 = THEME.TextDim })
+		setContainerHover(false)
+		if keyConn then
+			keyConn:Disconnect()
+			keyConn = nil
+		end
+		if StardustUI._closeActiveDropdown == close then
+			StardustUI._closeActiveDropdown = nil
+		end
+		-- clear search so next open starts clean
+		if searchBox then
+			searchBox.Text = ""
+			filterText = ""
+			applyFilter()
+		end
+	end
+
+	local function openDropdown()
+		if open then return end
+		-- close any other open dropdown
+		if StardustUI._closeActiveDropdown and StardustUI._closeActiveDropdown ~= close then
+			StardustUI._closeActiveDropdown()
+		end
+		open = true
+		listFrame.Visible = true
+		indicator.Text = "-"
+		tween(indicator, { TextColor3 = WHITE })
+		StardustUI._closeActiveDropdown = close
+
+		-- keyboard
+		selectedIdx = 1
+		updateHighlight()
+		if keyConn then keyConn:Disconnect() end
+		keyConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if gameProcessed or not open then return end
+			if input.KeyCode == Enum.KeyCode.Escape then
+				close()
+			elseif input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter then
+				local vis = getVisibleItems()
+				if vis[selectedIdx] then
+					value = vis[selectedIdx].Text
+					current.Text = value
+					close()
+					if callback then pcall(callback, value) end
+				end
+			elseif input.KeyCode == Enum.KeyCode.Up then
+				selectedIdx = math.max(1, selectedIdx - 1)
+				updateHighlight()
+			elseif input.KeyCode == Enum.KeyCode.Down then
+				local vis = getVisibleItems()
+				selectedIdx = math.min(#vis, selectedIdx + 1)
+				updateHighlight()
+			end
+		end)
+	end
+
 	local function rebuild()
-		for _, it in ipairs(items) do it:Destroy() end
+		for _, it in ipairs(items) do
+			it:Destroy()
+		end
 		items = {}
+
+		-- Search box (only when enough options)
+		if useSearch then
+			if not searchBox then
+				searchBox = make("TextBox", {
+					Size = UDim2.new(1, 0, 0, 26),
+					BackgroundColor3 = THEME.Section,
+					BackgroundTransparency = 0.3,
+					Text = "",
+					PlaceholderText = "Search...",
+					TextColor3 = WHITE,
+					PlaceholderColor3 = THEME.TextMute,
+					Font = THEME.Font,
+					TextSize = 12,
+					BorderSizePixel = 0,
+					ClearTextOnFocus = false,
+					LayoutOrder = 0,
+					ZIndex = 17,
+				}, listFrame)
+				corner(searchBox, UDim.new(0, 4))
+				stroke(searchBox, WHITE, 1, 0.7)
+				make("UIPadding", {
+					PaddingLeft = UDim.new(0, 8),
+					PaddingRight = UDim.new(0, 8),
+				}, searchBox)
+				searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+					filterText = searchBox.Text
+					applyFilter()
+				end)
+			end
+		elseif searchBox then
+			searchBox:Destroy()
+			searchBox = nil
+		end
+
 		for i, opt in ipairs(options) do
 			local it = make("TextButton", {
 				Size = UDim2.new(1, 0, 0, 26),
 				BackgroundColor3 = THEME.Section,
 				BackgroundTransparency = 0.5,
-				Text = opt, TextColor3 = WHITE,
-				Font = THEME.Font, TextSize = 12,
-				BorderSizePixel = 0, AutoButtonColor = false,
+				Text = tostring(opt),
+				TextColor3 = WHITE,
+				Font = THEME.Font,
+				TextSize = 12,
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				LayoutOrder = i, ZIndex = 17,
+				LayoutOrder = i,
+				ZIndex = 17,
 			}, listFrame)
 			corner(it, UDim.new(0, 4))
-			make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, it)
-			applyHoverEffect(it, nil, THEME.Section, WHITE, 0.5, 0)
-			it.MouseEnter:Connect(function() tween(it, { TextColor3 = BLACK }) end)
-			it.MouseLeave:Connect(function() tween(it, { TextColor3 = WHITE }) end)
+			make("UIPadding", {
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 10),
+			}, it)
+
+			-- mouse hover (keyboard highlight takes priority via updateHighlight)
+			it.MouseEnter:Connect(function()
+				if not open then return end
+				-- temporarily highlight, but keyboard can override
+				it.BackgroundColor3 = WHITE
+				it.BackgroundTransparency = 0
+				it.TextColor3 = BLACK
+			end)
+			it.MouseLeave:Connect(function()
+				if not open then return end
+				updateHighlight() -- restore correct keyboard state
+			end)
+
 			it.MouseButton1Click:Connect(function()
 				value = opt
-				current.Text = opt
-				open = false
-				listFrame.Visible = false
-				indicator.Text = "+"
+				current.Text = tostring(opt)
+				close()
 				if callback then pcall(callback, value) end
 			end)
+
 			items[#items + 1] = it
 		end
+
+		applyFilter()
 	end
+
 	rebuild()
 
-	-- Fix: Apply hover to the header so the full width highlights
-	applyHoverEffect(header, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
-	
-	header.MouseEnter:Connect(function() 
-		if not open then tween(indicator, { TextColor3 = WHITE }) end
-	end)
-	header.MouseLeave:Connect(function() 
-		if not open then tween(indicator, { TextColor3 = THEME.TextDim }) end
-	end)
-
-	header.MouseButton1Click:Connect(function()
-		open = not open
-		if open then
-			local h = (#options * 28) + 4
-			listFrame.Size = UDim2.new(1, 0, 0, h)
-			listFrame.Visible = true
-			indicator.Text = "-"
+	-- Header interaction
+	header.MouseEnter:Connect(function()
+		setContainerHover(true)
+		if not open then
 			tween(indicator, { TextColor3 = WHITE })
-		else
-			listFrame.Visible = false
-			indicator.Text = "+"
+		end
+	end)
+	header.MouseLeave:Connect(function()
+		setContainerHover(false)
+		if not open then
 			tween(indicator, { TextColor3 = THEME.TextDim })
 		end
 	end)
 
+	header.MouseButton1Click:Connect(function()
+		if open then
+			close()
+		else
+			openDropdown()
+		end
+	end)
+
 	return {
-		Set = function(_, v) value = v; current.Text = v end,
-		Get = function() return value end,
-		SetOptions = function(_, o) options = o; rebuild() end,
-		Destroy = function() container:Destroy() end,
+		Set = function(_, v)
+			value = v
+			current.Text = tostring(v)
+		end,
+		Get = function()
+			return value
+		end,
+		SetOptions = function(_, o)
+			options = o or {}
+			useSearch = #options >= 8
+			rebuild()
+			if open then
+				-- keep open but refresh
+				updateHighlight()
+			end
+		end,
+		Destroy = function()
+			if open then close() end
+			container:Destroy()
+		end,
 	}
 end
 
@@ -1480,6 +1709,7 @@ function Section:Keybind(text, default, callback)
 	default = default or Enum.KeyCode.Unknown
 	local current = default
 	local listening = false
+
 	local holder = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
@@ -1491,7 +1721,9 @@ function Section:Keybind(text, default, callback)
 	corner(holder, UDim.new(0, 6))
 	local st = animatedStroke(holder, 1.2, 0.55)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 8) }, holder)
+
 	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 16 }, holder)
+
 	local btn = make("TextButton", {
 		Size = UDim2.new(0.5, -8, 0, 22),
 		Position = UDim2.new(0.5, 4, 0.5, -11),
@@ -1504,14 +1736,15 @@ function Section:Keybind(text, default, callback)
 	}, holder)
 	corner(btn, UDim.new(0, 5))
 	stroke(btn, WHITE, 1, 0.7)
-	
+
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
-	
+
 	btn.MouseButton1Click:Connect(function()
 		listening = true
 		btn.Text = "..."
 		tween(btn, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK })
 	end)
+
 	UserInputService.InputBegan:Connect(function(input)
 		if listening and input.UserInputType == Enum.UserInputType.Keyboard then
 			listening = false
@@ -1521,6 +1754,7 @@ function Section:Keybind(text, default, callback)
 			if callback then pcall(callback, current) end
 		end
 	end)
+
 	return {
 		Get = function() return current end,
 		Set = function(_, k) current = k; btn.Text = k.Name end,
