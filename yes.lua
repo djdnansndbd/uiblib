@@ -1,5 +1,5 @@
 --[[
-	StardustUI v6 — Expand Dropdowns, High Transparency, Polished Tabs
+	StardustUI v7 — User Profile, Star Close Animation, Smooth Hovers
 ]]
 
 local StardustUI = {}
@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -30,11 +31,11 @@ local THEME = {
 	FontBold  = Enum.Font.GothamBold,
 	Corner    = UDim.new(0, 8),
 	Anim      = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+	AnimFast  = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 	WinW      = 580,
 	WinH      = 460,
 	TabW      = 140,
 
-	-- HIGHLY transparent so the star animation shows through everything
 	TrWindow  = 0.55,   
 	TrPanel   = 0.65,   
 	TrSection = 0.85,   
@@ -72,7 +73,6 @@ local function stroke(parent, color, thickness, transparency)
 	}, parent)
 end
 
--- Brighter, longer sweeping gradient stroke
 local function animatedStroke(parent, thickness, baseTransparency)
 	local st = stroke(parent, THEME.Stroke, thickness or 1.6, baseTransparency or 0.1)
 	local grad = make("UIGradient", {
@@ -125,6 +125,18 @@ local function ripple(parent, x, y)
 		BackgroundTransparency = 1,
 	}):Play()
 	task.delay(0.45, function() r:Destroy() end)
+end
+
+-- Smooth hover effect for elements
+local function applyHoverEffect(btn, isSelectedFunc, baseColor, hoverColor, baseTr, hoverTr)
+	btn.MouseEnter:Connect(function()
+		if isSelectedFunc and isSelectedFunc() then return end
+		tween(btn, { BackgroundColor3 = hoverColor, BackgroundTransparency = hoverTr }, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
+	end)
+	btn.MouseLeave:Connect(function()
+		if isSelectedFunc and isSelectedFunc() then return end
+		tween(btn, { BackgroundColor3 = baseColor, BackgroundTransparency = baseTr }, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out))
+	end)
 end
 
 ---------------------------------------------------------------------
@@ -404,7 +416,6 @@ function StardustUI.new(opts)
 end
 
 function Window:_build()
-	-- MAIN WINDOW
 	local win = make("Frame", {
 		Name = "Window_" .. self.Title,
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -414,7 +425,7 @@ function Window:_build()
 		BackgroundTransparency = THEME.TrWindow,
 		BorderSizePixel = 0,
 		Active = true,
-		ClipsDescendants = false, -- Let the border show!
+		ClipsDescendants = false, 
 		ZIndex = 10,
 	}, self.Gui)
 	corner(win)
@@ -437,7 +448,7 @@ function Window:_build()
 	local veil = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = THEME.Bg,
-		BackgroundTransparency = 0.45, -- Lower means the window is a bit darker, 0.45 lets the stars shine.
+		BackgroundTransparency = 0.45, 
 		BorderSizePixel = 0,
 		ZIndex = 12,
 	}, clipFrame)
@@ -504,8 +515,9 @@ function Window:_build()
 	}, top)
 	corner(closeBtn, UDim.new(0, 6))
 	animatedStroke(closeBtn, 1.4, 0.2)
-	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK }) end)
-	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.4, TextColor3 = WHITE }) end)
+	applyHoverEffect(closeBtn, nil, THEME.Element, WHITE, 0.4, 0)
+	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { TextColor3 = BLACK }) end)
+	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = WHITE }) end)
 	closeBtn.MouseButton1Click:Connect(function() self:_showQuitConfirm() end)
 
 	-- === TAB SIDEBAR ===
@@ -525,16 +537,17 @@ function Window:_build()
 		BorderSizePixel = 0, ZIndex = 13,
 	}, tabListBg)
 	make("Frame", {
-		Size = UDim2.new(0, 1, 1, -16),
+		Size = UDim2.new(0, 1, 1, -80), -- Stops above user profile
 		Position = UDim2.new(1, -1, 0, 8),
 		BackgroundColor3 = WHITE, BackgroundTransparency = 0.7,
 		BorderSizePixel = 0, ZIndex = 13,
 	}, tabListBg)
 
+	-- Tab Scroller (sized to leave room for user profile at bottom)
 	local tabScroll = make("ScrollingFrame", {
 		Name = "TabScroll",
 		Position = UDim2.fromOffset(0, 0),
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, 0, 1, -76), 
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 2,
@@ -555,6 +568,85 @@ function Window:_build()
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, tabScroll)
 	self.TabScroll = tabScroll
+
+	-- === USER PROFILE & STATS ===
+	local userProfile = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 76),
+		Position = UDim2.new(0, 0, 1, -76),
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = THEME.TrPanel,
+		BorderSizePixel = 0,
+		ZIndex = 13,
+	}, tabListBg)
+	corner(userProfile)
+	-- Square top corners
+	make("Frame", {
+		Size = UDim2.new(1, 0, 0, 10),
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = THEME.TrPanel,
+		BorderSizePixel = 0,
+		ZIndex = 13,
+	}, userProfile)
+	make("Frame", {
+		Size = UDim2.new(1, 0, 0, 1),
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.8,
+		BorderSizePixel = 0,
+		ZIndex = 14,
+	}, userProfile)
+
+	local avatar = make("ImageLabel", {
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.fromOffset(10, 10),
+		BackgroundColor3 = THEME.Element,
+		BorderSizePixel = 0,
+		Image = "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=48&h=48",
+		ZIndex = 15,
+	}, userProfile)
+	corner(avatar, UDim.new(1, 0))
+	stroke(avatar, WHITE, 1, 0.5)
+
+	local nameLbl = label({
+		Size = UDim2.new(1, -50, 0, 14),
+		Position = UDim2.fromOffset(46, 10),
+		Text = player.DisplayName,
+		Font = THEME.FontBold, TextSize = 13,
+		ZIndex = 15,
+	}, userProfile)
+	
+	-- Underline for username
+	make("Frame", {
+		Size = UDim2.new(0, nameLbl.TextBounds.X, 0, 1),
+		Position = UDim2.new(0, 46, 0, 25),
+		BackgroundColor3 = THEME.TextDim,
+		BorderSizePixel = 0,
+		ZIndex = 15,
+	}, userProfile)
+
+	local statsLbl = label({
+		Size = UDim2.new(1, -20, 0, 30),
+		Position = UDim2.fromOffset(10, 40),
+		Text = "",
+		TextSize = 11, TextColor3 = THEME.TextDim,
+		TextWrapped = true,
+		ZIndex = 15,
+	}, userProfile)
+
+	-- Stats update loop (Every 0.5s)
+	local lastPing = 0
+	task.spawn(function()
+		while not self.Destroyed do
+			local time = os.date("%I:%M%p"):gsub("^0", ""):lower()
+			local fps = math.floor(1 / math.max(RunService.RenderStepped:Wait(), 0.001))
+			if math.random() < 0.2 then
+				lastPing = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) 
+			end
+			statsLbl.Text = string.format("%s\nfps: %d | ping: %dms", time, fps, lastPing)
+			task.wait(0.5)
+		end
+	end)
 
 	-- === CONTENT ===
 	local content = make("Frame", {
@@ -616,7 +708,7 @@ function Window:_showQuitConfirm()
 		BackgroundColor3 = THEME.Bg,
 		BackgroundTransparency = 0.1,
 		BorderSizePixel = 0,
-		ClipsDescendants = false, -- Let the border show
+		ClipsDescendants = false, 
 		ZIndex = 201,
 	}, overlayFrame)
 	corner(dlg, UDim.new(0, 12))
@@ -766,8 +858,35 @@ end
 
 function Window:Toggle(v)
 	if self.Destroyed then return end
-	self.Visible = v ~= nil and v or not self.Visible
-	self.Frame.Visible = self.Visible
+	local targetVisible = v ~= nil and v or not self.Visible
+	if targetVisible == self.Visible then return end
+	self.Visible = targetVisible
+
+	if self.Visible then
+		-- Star Open Animation
+		self.Frame.Visible = true
+		self.Frame.Size = UDim2.fromOffset(10, 10)
+		self.Frame.BackgroundTransparency = 1
+		self.Frame.Rotation = -45
+		
+		tween(self.Frame, {
+			Size = UDim2.fromOffset(THEME.WinW, THEME.WinH),
+			BackgroundTransparency = THEME.TrWindow,
+			Rotation = 0
+		}, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out))
+	else
+		-- Star Close Animation
+		tween(self.Frame, {
+			Size = UDim2.fromOffset(0, 0),
+			BackgroundTransparency = 1,
+			Rotation = 45
+		}, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In))
+		task.delay(0.3, function()
+			if not self.Visible then
+				self.Frame.Visible = false
+			end
+		end)
+	end
 end
 
 function Window:Destroy()
@@ -794,8 +913,9 @@ function Window:Tab(name)
 	tab.Window = self
 	tab.Sections = {}
 
+	-- Cleaner Tab Layout
 	local btn = make("TextButton", {
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.7,
 		Text = "",
@@ -803,12 +923,12 @@ function Window:Tab(name)
 		ZIndex = 15,
 	}, self.TabScroll)
 	corner(btn, UDim.new(0, 6))
-	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.6)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, btn)
+	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.8)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 12) }, btn)
 	local txt = label({
 		Size = UDim2.fromScale(1, 1),
 		Text = name,
-		TextColor3 = WHITE,
+		TextColor3 = THEME.TextDim,
 		Font = THEME.FontBold, TextSize = 13,
 		ZIndex = 16,
 	}, btn)
@@ -849,11 +969,14 @@ function Window:Tab(name)
 	tab.Scroll = scroll
 
 	btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
+	
+	-- Hover animation for tab
+	applyHoverEffect(btn, function() return self.CurrentTab == tab end, THEME.Element, THEME.Element, 0.7, 0.3)
 	btn.MouseEnter:Connect(function()
-		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.4 }) end
+		if self.CurrentTab ~= tab then tween(txt, { TextColor3 = WHITE }, THEME.AnimFast) end
 	end)
 	btn.MouseLeave:Connect(function()
-		if self.CurrentTab ~= tab then tween(btn, { BackgroundTransparency = 0.7 }) end
+		if self.CurrentTab ~= tab then tween(txt, { TextColor3 = THEME.TextDim }, THEME.AnimFast) end
 	end)
 
 	table.insert(self.Tabs, tab)
@@ -866,13 +989,13 @@ function Window:SelectTab(tab)
 	if self.CurrentTab then
 		self.CurrentTab.Holder.Visible = false
 		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
-		self.CurrentTab.ButtonText.TextColor3 = WHITE
-		self.CurrentTab.ButtonStroke.Transparency = 0.6
+		tween(self.CurrentTab.ButtonText, { TextColor3 = THEME.TextDim })
+		self.CurrentTab.ButtonStroke.Transparency = 0.8
 	end
 	self.CurrentTab = tab
 	tab.Holder.Visible = true
 	tween(tab.Button, { BackgroundColor3 = WHITE, BackgroundTransparency = 0.1 })
-	tab.ButtonText.TextColor3 = BLACK
+	tween(tab.ButtonText, { TextColor3 = BLACK })
 	tab.ButtonStroke.Transparency = 0.15
 end
 
@@ -955,8 +1078,11 @@ function Section:Button(text, callback)
 		Text = text, TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 13, ZIndex = 16,
 	}, btn)
-	btn.MouseEnter:Connect(function() tween(btn, { BackgroundColor3 = WHITE, BackgroundTransparency = 0.1 }); txt.TextColor3 = BLACK end)
-	btn.MouseLeave:Connect(function() tween(btn, { BackgroundColor3 = THEME.Element, BackgroundTransparency = THEME.TrElement }); txt.TextColor3 = WHITE end)
+	
+	applyHoverEffect(btn, nil, THEME.Element, WHITE, THEME.TrElement, 0.1)
+	btn.MouseEnter:Connect(function() tween(txt, { TextColor3 = BLACK }) end)
+	btn.MouseLeave:Connect(function() tween(txt, { TextColor3 = WHITE }) end)
+	
 	btn.MouseButton1Click:Connect(function()
 		ripple(btn, btn.AbsoluteSize.X / 2, btn.AbsoluteSize.Y / 2)
 		if callback then
@@ -1005,6 +1131,9 @@ function Section:Toggle(text, default, callback)
 		BorderSizePixel = 0, ZIndex = 17,
 	}, btn)
 	corner(knob, UDim.new(1, 0))
+
+	-- Add hover effect to the toggle container
+	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
 
 	local function apply(v, fire)
 		state = v
@@ -1074,6 +1203,10 @@ function Section:Slider(text, min, max, default, callback)
 	}, track)
 	corner(knob, UDim.new(1, 0))
 	stroke(knob, WHITE, 2, 0.6)
+	
+	-- Add hover effect to slider container
+	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
+
 	local dragging = false
 	local function updateFromX(x)
 		local abs, sz = track.AbsolutePosition, track.AbsoluteSize
@@ -1143,6 +1276,9 @@ function Section:Textbox(text, default, callback)
 	corner(box, UDim.new(0, 5))
 	stroke(box, WHITE, 1, 0.7)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, box)
+	
+	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
+	
 	box.Focused:Connect(function() tween(box, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK }) end)
 	box.FocusLost:Connect(function(enter)
 		tween(box, { BackgroundColor3 = THEME.Section, BackgroundTransparency = 0.2, TextColor3 = WHITE })
@@ -1174,7 +1310,7 @@ function Section:Dropdown(text, options, default, callback)
 	corner(holder, UDim.new(0, 6))
 	animatedStroke(holder, 1.2, 0.55)
 	
-	local layout = make("UIListLayout", {
+	make("UIListLayout", {
 		Padding = UDim.new(0, 0),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, holder)
@@ -1241,13 +1377,13 @@ function Section:Dropdown(text, options, default, callback)
 			}, list)
 			corner(it, UDim.new(0, 4))
 			make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, it)
-			it.MouseEnter:Connect(function() tween(it, { BackgroundColor3 = WHITE, BackgroundTransparency = 0, TextColor3 = BLACK }) end)
-			it.MouseLeave:Connect(function() tween(it, { BackgroundColor3 = THEME.Section, BackgroundTransparency = 0.5, TextColor3 = WHITE }) end)
+			applyHoverEffect(it, nil, THEME.Section, WHITE, 0.5, 0)
+			it.MouseEnter:Connect(function() tween(it, { TextColor3 = BLACK }) end)
+			it.MouseLeave:Connect(function() tween(it, { TextColor3 = WHITE }) end)
 			it.MouseButton1Click:Connect(function()
 				value = opt
 				current.Text = opt
 				open = false
-				-- Animate the holder back to 32px height
 				tween(holder, { Size = UDim2.new(1, 0, 0, 32) })
 				tween(indicator, { BackgroundTransparency = 0.5 })
 				if callback then pcall(callback, value) end
@@ -1257,10 +1393,17 @@ function Section:Dropdown(text, options, default, callback)
 	end
 	rebuild()
 
+	applyHoverEffect(header, nil, WHITE, WHITE, 1, 1) -- Fake hover, just to allow the visual
+	header.MouseEnter:Connect(function() 
+		if not open then tween(indicator, { BackgroundTransparency = 0.1 }) end
+	end)
+	header.MouseLeave:Connect(function() 
+		if not open then tween(indicator, { BackgroundTransparency = 0.5 }) end
+	end)
+
 	header.MouseButton1Click:Connect(function()
 		open = not open
 		if open then
-			-- Calculate total height: 32 (header) + padding (4) + items
 			local h = 32 + 4 + (#options * 28)
 			tween(holder, { Size = UDim2.new(1, 0, 0, h) })
 			tween(indicator, { BackgroundTransparency = 0 })
@@ -1306,6 +1449,9 @@ function Section:Keybind(text, default, callback)
 	}, holder)
 	corner(btn, UDim.new(0, 5))
 	stroke(btn, WHITE, 1, 0.7)
+	
+	applyHoverEffect(holder, nil, THEME.Element, THEME.Element, THEME.TrElement, THEME.TrElement - 0.1)
+	
 	btn.MouseButton1Click:Connect(function()
 		listening = true
 		btn.Text = "..."
