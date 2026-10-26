@@ -1,5 +1,5 @@
 --[[
-	StardustUI v11 — Info Tab with User Card & Executor details
+	StardustUI v12 — Executor name in the sidebar
 ]]
 
 local StardustUI = {}
@@ -628,6 +628,15 @@ function Window:_build()
 		ZIndex = 15,
 	}, userProfile)
 
+	-- Detect Executor
+	local execName = "Unknown"
+	if identifyexecutor then
+		local ok, result = pcall(identifyexecutor)
+		if ok and type(result) == "string" then
+			execName = result
+		end
+	end
+
 	local statsLbl = label({
 		Size = UDim2.new(1, -20, 0, 30),
 		Position = UDim2.fromOffset(10, 40),
@@ -646,7 +655,7 @@ function Window:_build()
 				local pingVal = Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
 				if pingVal then lastPing = math.floor(pingVal) end
 			end
-			statsLbl.Text = string.format("%s\nfps: %d | ping: %dms", time, fps, lastPing)
+			statsLbl.Text = string.format("%s | %s\nfps: %d | ping: %dms", time, execName, fps, lastPing)
 			task.wait(0.5)
 		end
 	end)
@@ -1057,7 +1066,6 @@ function Section:_nextOrder()
 	return self.Order
 end
 
--- NEW: Custom Card for User & Executor info
 function Section:Card(title, avatarUrl, fields)
 	local card = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 86),
