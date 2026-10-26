@@ -1,5 +1,5 @@
 --[[
-	StardustUI v12 — Executor name in the sidebar
+	StardustUI v13 — Removed animations, fixed dropdown clicking and indicators
 ]]
 
 local StardustUI = {}
@@ -628,7 +628,6 @@ function Window:_build()
 		ZIndex = 15,
 	}, userProfile)
 
-	-- Detect Executor
 	local execName = "Unknown"
 	if identifyexecutor then
 		local ok, result = pcall(identifyexecutor)
@@ -871,33 +870,8 @@ end
 function Window:Toggle(v)
 	if self.Destroyed then return end
 	local targetVisible = v ~= nil and v or not self.Visible
-	if targetVisible == self.Visible then return end
 	self.Visible = targetVisible
-
-	if self.Visible then
-		self.Frame.Visible = true
-		self.Frame.Size = UDim2.fromOffset(10, 10)
-		self.Frame.BackgroundTransparency = 1
-		self.Frame.Rotation = -45
-		
-		tween(self.Frame, {
-			Size = UDim2.fromOffset(THEME.WinW, THEME.WinH),
-			BackgroundTransparency = THEME.TrWindow,
-			Rotation = 0
-		}, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
-	else
-		tween(self.Frame, {
-			Size = UDim2.fromOffset(10, 10),
-			BackgroundTransparency = 1,
-			Rotation = 45
-		}, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In))
-		
-		task.delay(0.3, function()
-			if not self.Visible then
-				self.Frame.Visible = false
-			end
-		end)
-	end
+	self.Frame.Visible = self.Visible
 end
 
 function Window:Destroy()
@@ -1368,6 +1342,7 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
+-- REBUILT DROPDOWN (Activated instead of InputBegan, fixes weird overlaps)
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
@@ -1412,16 +1387,15 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, header)
 
+	-- The visual indicator (bottom line)
 	local indicator = make("Frame", {
-		Size = UDim2.new(0, 16, 0, 2),
-		Position = UDim2.new(1, 0, 1, -6),
-		AnchorPoint = Vector2.new(1, 0),
+		Size = UDim2.new(1, -24, 0, 1),
+		Position = UDim2.new(0, 12, 1, -3),
 		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.5,
+		BackgroundTransparency = 0.8,
 		BorderSizePixel = 0,
 		ZIndex = 17,
 	}, header)
-	corner(indicator, UDim.new(1, 0))
 
 	local list = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -1458,7 +1432,6 @@ function Section:Dropdown(text, options, default, callback)
 				current.Text = opt
 				open = false
 				tween(holder, { Size = UDim2.new(1, 0, 0, 32) })
-				tween(indicator, { BackgroundTransparency = 0.5 })
 				if callback then pcall(callback, value) end
 			end)
 			items[#items + 1] = it
@@ -1469,21 +1442,22 @@ function Section:Dropdown(text, options, default, callback)
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	
 	header.MouseEnter:Connect(function() 
-		if not open then tween(indicator, { BackgroundTransparency = 0.1 }) end
+		if not open then tween(indicator, { BackgroundTransparency = 0.3 }) end
 	end)
 	header.MouseLeave:Connect(function() 
-		if not open then tween(indicator, { BackgroundTransparency = 0.5 }) end
+		if not open then tween(indicator, { BackgroundTransparency = 0.8 }) end
 	end)
 
-	header.MouseButton1Click:Connect(function()
+	-- Using Activated (Click) instead of InputBegan prevents accidental opens
+	header.Activated:Connect(function()
 		open = not open
 		if open then
 			local h = 32 + 4 + (#options * 28)
 			tween(holder, { Size = UDim2.new(1, 0, 0, h) })
-			tween(indicator, { BackgroundTransparency = 0 })
+			tween(indicator, { BackgroundTransparency = 0.2 })
 		else
 			tween(holder, { Size = UDim2.new(1, 0, 0, 32) })
-			tween(indicator, { BackgroundTransparency = 0.5 })
+			tween(indicator, { BackgroundTransparency = 0.8 })
 		end
 	end)
 
