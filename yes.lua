@@ -1,5 +1,5 @@
 --[[
-	StardustUI v18 — Dropdown expands downwards and pushes elements, fixed +/- position
+	StardustUI v19 — Final Dropdown Fixes, correct +/- and full highlighting
 ]]
 
 local StardustUI = {}
@@ -754,7 +754,7 @@ function Window:_showQuitConfirm()
 		TextSize = 26,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = WHITE,
-			ZIndex = 204,
+		ZIndex = 204,
 	}, dlgClip)
 
 	label({
@@ -1342,7 +1342,7 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- FIXED DROPDOWN (Expands downwards and pushes elements below)
+-- FIXED DROPDOWN
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
@@ -1360,7 +1360,7 @@ function Section:Dropdown(text, options, default, callback)
 	}, self.Frame)
 	corner(container, UDim.new(0, 6))
 	local st = animatedStroke(container, 1.2, 0.55)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingBottom = UDim.new(0, 4) }, container)
+	-- No UIPadding on the container, so the list can touch the edges and highlight fully
 	make("UIListLayout", {
 		Padding = UDim.new(0, 4),
 		SortOrder = Enum.SortOrder.LayoutOrder,
@@ -1368,13 +1368,14 @@ function Section:Dropdown(text, options, default, callback)
 
 	local header = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 32),
-		BackgroundTransparency = 1,
+		BackgroundTransparency = 1, -- Let the hover effect handle the background
 		Text = "",
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		LayoutOrder = 1,
 		ZIndex = 16,
 	}, container)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, header)
 	
 	label({ Size = UDim2.new(0.6, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 17 }, header)
 	
@@ -1386,6 +1387,7 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, header)
 	
+	-- The + / - Indicator safely inside the header
 	local indicator = label({
 		Size = UDim2.fromOffset(20, 20),
 		Position = UDim2.new(1, 0, 0.5, -10),
@@ -1395,7 +1397,7 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, header)
 
-	-- This frame holds the options. It's Visible = false so you can't click it when closed.
+	-- The list that expands downwards
 	local listFrame = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
 		BackgroundTransparency = 1,
@@ -1404,6 +1406,8 @@ function Section:Dropdown(text, options, default, callback)
 		LayoutOrder = 2,
 		ZIndex = 16,
 	}, container)
+	-- Padding inside the list itself so buttons highlight fully
+	make("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, listFrame)
 	make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, listFrame)
 
 	local items = {}
@@ -1439,6 +1443,7 @@ function Section:Dropdown(text, options, default, callback)
 	end
 	rebuild()
 
+	-- Fix: Apply hover to the header so the full width highlights
 	applyHoverEffect(header, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	
 	header.MouseEnter:Connect(function() 
