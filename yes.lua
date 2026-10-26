@@ -1,5 +1,5 @@
 --[[
-	StardustUI v14 — Removed open/close animations entirely, fixed dropdown ZIndex overlaps
+	StardustUI v15 — Fixed dropdown ghost clicking, added +/- indicators
 ]]
 
 local StardustUI = {}
@@ -1342,7 +1342,7 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- REBUILT DROPDOWN (Activated instead of InputBegan, fixes weird overlaps)
+-- FIXED DROPDOWN
 function Section:Dropdown(text, options, default, callback)
 	options = options or {}
 	default = default or (options[1] or "")
@@ -1366,36 +1366,43 @@ function Section:Dropdown(text, options, default, callback)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, holder)
 
-	local header = make("TextButton", {
+	-- THE HEADER IS NOW A FRAME, SO WE CAN SEPARATE THE CLICKABLE AREA
+	local headerFrame = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		ZIndex = 16,
+	}, holder)
+	
+	local headerBtn = make("TextButton", {
+		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
 		Text = "",
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
-		LayoutOrder = 1,
 		ZIndex = 16,
-	}, holder)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, header)
+	}, headerFrame)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, headerBtn)
 	
-	label({ Size = UDim2.new(0.5, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 17 }, header)
+	label({ Size = UDim2.new(0.6, 0, 1, 0), Text = text, TextSize = 13, ZIndex = 17 }, headerBtn)
 	
 	local current = label({
-		Size = UDim2.new(0.5, 0, 1, 0),
-		Position = UDim2.new(0.5, 0, 0, 0),
+		Size = UDim2.new(0.4, -24, 1, 0),
+		Position = UDim2.new(0.6, 0, 0, 0),
 		Text = value, TextSize = 12, TextColor3 = THEME.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 17,
-	}, header)
-
-	-- The visual indicator (bottom line)
-	local indicator = make("Frame", {
-		Size = UDim2.new(1, -24, 0, 1),
-		Position = UDim2.new(0, 12, 1, -3),
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.8,
-		BorderSizePixel = 0,
+	}, headerBtn)
+	
+	-- NEW: + / - Indicator
+	local indicator = label({
+		Size = UDim2.fromOffset(20, 20),
+		Position = UDim2.new(1, 0, 0.5, -10),
+		Text = "+",
+		TextSize = 18, TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 17,
-	}, header)
+	}, headerBtn)
 
 	local list = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -1432,6 +1439,7 @@ function Section:Dropdown(text, options, default, callback)
 				current.Text = opt
 				open = false
 				tween(holder, { Size = UDim2.new(1, 0, 0, 32) })
+				indicator.Text = "+"
 				if callback then pcall(callback, value) end
 			end)
 			items[#items + 1] = it
@@ -1441,23 +1449,24 @@ function Section:Dropdown(text, options, default, callback)
 
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	
-	header.MouseEnter:Connect(function() 
-		if not open then tween(indicator, { BackgroundTransparency = 0.3 }) end
+	headerBtn.MouseEnter:Connect(function() 
+		if not open then tween(indicator, { TextColor3 = WHITE }) end
 	end)
-	header.MouseLeave:Connect(function() 
-		if not open then tween(indicator, { BackgroundTransparency = 0.8 }) end
+	headerBtn.MouseLeave:Connect(function() 
+		if not open then tween(indicator, { TextColor3 = THEME.TextDim }) end
 	end)
 
-	-- Using Activated (Click) instead of InputBegan prevents accidental opens
-	header.Activated:Connect(function()
+	headerBtn.MouseButton1Click:Connect(function()
 		open = not open
 		if open then
 			local h = 32 + 4 + (#options * 28)
 			tween(holder, { Size = UDim2.new(1, 0, 0, h) })
-			tween(indicator, { BackgroundTransparency = 0.2 })
+			indicator.Text = "-"
+			tween(indicator, { TextColor3 = WHITE })
 		else
 			tween(holder, { Size = UDim2.new(1, 0, 0, 32) })
-			tween(indicator, { BackgroundTransparency = 0.8 })
+			indicator.Text = "+"
+			tween(indicator, { TextColor3 = THEME.TextDim })
 		end
 	end)
 
