@@ -1,5 +1,5 @@
 --[[
-	StardustUI v9 — True Star animation, perfect long usernames, bug fixes
+	StardustUI v10 — Smooth open/close, fixed TextScaled username
 ]]
 
 local StardustUI = {}
@@ -99,7 +99,7 @@ local function label(props, parent)
 		TextColor3 = THEME.Text,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextStrokeTransparency = 1, -- Fixes default thick roblox text outlines
+		TextStrokeTransparency = 1,
 		ZIndex = 2,
 	}
 	for k, v in pairs(props) do base[k] = v end
@@ -427,7 +427,7 @@ function Window:_build()
 		BackgroundTransparency = THEME.TrWindow,
 		BorderSizePixel = 0,
 		Active = true,
-		ClipsDescendants = true, -- FIXED: Prevents stars from bleeding out during star animation
+		ClipsDescendants = true, 
 		ZIndex = 10,
 	}, self.Gui)
 	corner(win)
@@ -614,9 +614,11 @@ function Window:_build()
 		Text = player.DisplayName,
 		Font = THEME.FontBold, 
 		TextSize = 13,
-		TextScaled = true, -- FIXED: Long usernames shrink to fit automatically
+		TextScaled = true, 
+		TextWrapped = false,
 		ZIndex = 15,
 	}, userProfile)
+	make("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 7 }, nameLbl) -- FIXED: Properly scales small to fit
 	
 	make("Frame", {
 		Size = UDim2.new(1, -50, 0, 1),
@@ -750,7 +752,7 @@ function Window:_showQuitConfirm()
 	label({
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 60),
-		Size = UDim2.new(1, -40, 0, 22),
+			Size = UDim2.new(1, -40, 0, 22),
 		Text = "Quit StardustUI?",
 		Font = THEME.FontBold, TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -870,20 +872,21 @@ function Window:Toggle(v)
 		self.Frame.BackgroundTransparency = 1
 		self.Frame.Rotation = -45
 		
+		-- FIXED: Using Quint instead of Back to prevent the glitchy overshoot
 		tween(self.Frame, {
 			Size = UDim2.fromOffset(THEME.WinW, THEME.WinH),
 			BackgroundTransparency = THEME.TrWindow,
 			Rotation = 0
-		}, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out))
+		}, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
 	else
 		-- STAR CLOSE ANIMATION
 		tween(self.Frame, {
-			Size = UDim2.fromOffset(10, 10), -- Collapses into a tiny star point
+			Size = UDim2.fromOffset(10, 10),
 			BackgroundTransparency = 1,
 			Rotation = 45
-		}, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In))
+		}, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In))
 		
-		task.delay(0.35, function()
+		task.delay(0.3, function()
 			if not self.Visible then
 				self.Frame.Visible = false
 			end
