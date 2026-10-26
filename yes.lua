@@ -1,9 +1,8 @@
 --[[
-	StardustUI v19.1 — Clean release
-	• Dropdown: fixed +/- clipping, full-width highlight, AutomaticSize push layout
-	• Exclusive open (only one dropdown open at a time)
-	• Keyboard navigation (↑/↓, Enter, Esc)
-	• Search filter when options ≥ 8
+	StardustUI v19.2
+	• Full config system (Save / Load / AutoLoad / AutoSave)
+	• Elements automatically register when given a ConfigKey
+	• Works with most executors that support writefile / readfile / isfile / makefolder
 ]]
 
 local StardustUI = {}
@@ -12,12 +11,12 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Stats = game:GetService("Stats")
+local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local rng = Random.new()
 
--- Global reference so only one dropdown can be open
 StardustUI._closeActiveDropdown = nil
 
 ---------------------------------------------------------------------
@@ -142,6 +141,61 @@ local function applyHoverEffect(btn, isSelectedFunc, baseColor, hoverColor, base
 		tween(btn, { BackgroundColor3 = baseColor, BackgroundTransparency = baseTr }, THEME.AnimFast)
 		if strokeObj then tween(strokeObj, { Transparency = baseStrTr }, THEME.AnimFast) end
 	end)
+end
+
+---------------------------------------------------------------------
+-- CONFIG HELPERS
+---------------------------------------------------------------------
+local function safeWrite(path, data)
+	if writefile then
+		local ok = pcall(writefile, path, data)
+		return ok
+	end
+	return false
+end
+
+local function safeRead(path)
+	if readfile and isfile and isfile(path) then
+		local ok, content = pcall(readfile, path)
+		if ok then return content end
+	end
+	return nil
+end
+
+local function serialize(value)
+	local t = typeof(value)
+	if t == "EnumItem" then
+		return { __type = "Enum", enum = tostring(value.EnumType), name = value.Name }
+	elseif t == "Color3" then
+		return { __type = "Color3", r = value.R, g = value.G, b = value.B }
+	elseif t == "table" then
+		local out = {}
+		for k, v in pairs(value) do
+			out[tostring(k)] = serialize(v)
+		end
+		return out
+	end
+	return value
+end
+
+local function deserialize(value)
+	if type(value) == "table" and value.__type then
+		if value.__type == "Enum" then
+			local enumTable = Enum[value.enum]
+			if enumTable then
+				return enumTable[value.name]
+			end
+		elseif value.__type == "Color3" then
+			return Color3.new(value.r, value.g, value.b)
+		end
+	elseif type(value) == "table" then
+		local out = {}
+		for k, v in pairs(value) do
+			out[k] = deserialize(v)
+		end
+		return out
+	end
+	return value
 end
 
 ---------------------------------------------------------------------
@@ -390,6 +444,13 @@ function StardustUI.new(opts)
 	self.Destroyed = false
 	self.Updaters = {}
 	self._resetters = {}
+	self._configElements = {}
+
+	-- Config
+	self.ConfigName   = opts.ConfigName or self.Title:gsub("%s+", "")
+	self.ConfigFolder = opts.ConfigFolder or "StardustConfigs"
+	self.AutoLoad     = opts.AutoLoad ~= false   -- default true
+	self.AutoSave     = opts.AutoSave ~= false   -- default true
 
 	local sg = playerGui:FindFirstChild("StardustUI")
 	if not sg then
@@ -417,7 +478,85 @@ function StardustUI.new(opts)
 		end)
 	end
 	table.insert(StardustUI._windows, self)
+
+	-- Auto-load after elements have a chance to register
+	if self.AutoLoad then
+		task.defer(function()
+			task.wait(0.2)
+			self:LoadConfig()
+		end)
+	end
+
 	return self
+end
+
+function Window:_getConfigPath()
+	return self.ConfigFolder .. "/" .. self.ConfigName .. ".json"
+end
+
+function Window:SaveConfig()
+	local data = {}
+	for key, entry in pairs(self._configElements) do
+		local ok, value = pcall(entry.Get)
+		if ok then
+			data[key] = serialize(value)
+		end
+	end
+
+	local encoded = HttpService:JSONEncode(data)
+	local path = self:_getConfigPath()
+
+	if makefolder and not (isfolder and isfolder(self.ConfigFolder)) then
+		pcall(makefolder, self.ConfigFolder)
+	end
+
+	if safeWrite(path, encoded) then
+		return true, path
+	end
+	return false, "writefile not available"
+end
+
+function Window:LoadConfig()
+	local path = self:_getConfigPath()
+	local content = safeRead(path)
+	if not content then
+		return false, "no config file"
+	end
+
+	local ok, data = pcall(function()
+		return HttpService:JSONDecode(content)
+	end)
+	if not ok or type(data) ~= "table" then
+		return false, "invalid config"
+	end
+
+	for key, raw in pairs(data) do
+		local entry = self._configElements[key]
+		if entry then
+			local value = deserialize(raw)
+			pcall(entry.Set, value)
+		end
+	end
+	return true
+end
+
+function Window:DeleteConfig()
+	local path = self:_getConfigPath()
+	if delfile and isfile and isfile(path) then
+		pcall(delfile, path)
+		return true
+	end
+	return false
+end
+
+function Window:GetConfigPath()
+	return self:_getConfigPath()
+end
+
+function Window:_register(key, getFn, setFn)
+	if key and key ~= "" then
+		self._configElements[key] = { Get = getFn, Set = setFn }
+	end
 end
 
 function Window:_build()
@@ -459,7 +598,7 @@ function Window:_build()
 	}, clipFrame)
 	corner(veil)
 
-	-- === TOP BAR ===
+	-- TOP BAR
 	local top = make("Frame", {
 		Name = "TopBar",
 		Size = UDim2.new(1, 0, 0, 46),
@@ -525,7 +664,7 @@ function Window:_build()
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = WHITE }) end)
 	closeBtn.MouseButton1Click:Connect(function() self:_showQuitConfirm() end)
 
-	-- === TAB SIDEBAR ===
+	-- TAB SIDEBAR
 	local tabListBg = make("Frame", {
 		Name = "TabListBg",
 		Position = UDim2.new(0, 0, 0, 46),
@@ -573,7 +712,7 @@ function Window:_build()
 	}, tabScroll)
 	self.TabScroll = tabScroll
 
-	-- === USER PROFILE & STATS ===
+	-- USER PROFILE
 	local userProfile = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 76),
 		Position = UDim2.new(0, 0, 1, -76),
@@ -662,7 +801,7 @@ function Window:_build()
 		end
 	end)
 
-	-- === CONTENT ===
+	-- CONTENT
 	local content = make("Frame", {
 		Name = "Content",
 		Position = UDim2.fromOffset(THEME.TabW + 1, 46),
@@ -1112,7 +1251,7 @@ function Section:Card(title, avatarUrl, fields)
 end
 
 ---------------------------------------------------------------------
--- ELEMENTS
+-- ELEMENTS (ConfigKey support added)
 ---------------------------------------------------------------------
 function Section:Button(text, callback)
 	local btn = make("TextButton", {
@@ -1151,7 +1290,7 @@ function Section:Button(text, callback)
 	}
 end
 
-function Section:Toggle(text, default, callback)
+function Section:Toggle(text, default, callback, configKey)
 	default = default == true
 	local state = default
 
@@ -1201,6 +1340,9 @@ function Section:Toggle(text, default, callback)
 			local ok, err = pcall(callback, state)
 			if not ok then warn("[StardustUI]", err) end
 		end
+		if fire and self.Tab.Window.AutoSave then
+			self.Tab.Window:SaveConfig()
+		end
 	end
 
 	btn.MouseButton1Click:Connect(function() apply(not state, true) end)
@@ -1209,6 +1351,8 @@ function Section:Toggle(text, default, callback)
 		if state then apply(false, true) end
 	end)
 
+	self.Tab.Window:_register(configKey, function() return state end, function(v) apply(v == true, false) end)
+
 	return {
 		Set = function(_, v) apply(v, false) end,
 		Get = function() return state end,
@@ -1216,7 +1360,7 @@ function Section:Toggle(text, default, callback)
 	}
 end
 
-function Section:Slider(text, min, max, default, callback)
+function Section:Slider(text, min, max, default, callback, configKey)
 	min, max = min or 0, max or 100
 	default = math.clamp(default or min, min, max)
 	local value = default
@@ -1277,6 +1421,9 @@ function Section:Slider(text, min, max, default, callback)
 		knob.Position = UDim2.new(pct, 0, 0.5, 0)
 		valLabel.Text = tostring(value)
 		if callback then pcall(callback, value) end
+		if self.Tab.Window.AutoSave then
+			self.Tab.Window:SaveConfig()
+		end
 	end
 
 	track.InputBegan:Connect(function(input)
@@ -1296,6 +1443,15 @@ function Section:Slider(text, min, max, default, callback)
 		end
 	end)
 
+	self.Tab.Window:_register(configKey, function() return value end, function(v)
+		v = math.clamp(tonumber(v) or min, min, max)
+		local pct = (v - min) / (max - min)
+		value = v
+		fill.Size = UDim2.new(pct, 0, 1, 0)
+		knob.Position = UDim2.new(pct, 0, 0.5, 0)
+		valLabel.Text = tostring(value)
+	end)
+
 	return {
 		Set = function(_, v)
 			v = math.clamp(v, min, max)
@@ -1310,7 +1466,7 @@ function Section:Slider(text, min, max, default, callback)
 	}
 end
 
-function Section:Textbox(text, default, callback)
+function Section:Textbox(text, default, callback, configKey)
 	default = default or ""
 	local holder = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
@@ -1347,7 +1503,12 @@ function Section:Textbox(text, default, callback)
 	box.FocusLost:Connect(function(enter)
 		tween(box, { BackgroundColor3 = THEME.Section, BackgroundTransparency = 0.2, TextColor3 = WHITE })
 		if callback then pcall(callback, box.Text, enter) end
+		if self.Tab.Window.AutoSave then
+			self.Tab.Window:SaveConfig()
+		end
 	end)
+
+	self.Tab.Window:_register(configKey, function() return box.Text end, function(v) box.Text = tostring(v or "") end)
 
 	return {
 		Set = function(_, t) box.Text = t end,
@@ -1356,10 +1517,7 @@ function Section:Textbox(text, default, callback)
 	}
 end
 
--- ============================================================
--- DROPDOWN  (v19.1 — fixed clipping, full highlight, polish)
--- ============================================================
-function Section:Dropdown(text, options, default, callback)
+function Section:Dropdown(text, options, default, callback, configKey)
 	options = options or {}
 	default = default or (options[1] or "")
 	local value = default
@@ -1371,7 +1529,6 @@ function Section:Dropdown(text, options, default, callback)
 	local keyConn = nil
 	local useSearch = #options >= 8
 
-	-- Outer container: AutomaticSize so the list pushes content below
 	local container = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
@@ -1390,7 +1547,6 @@ function Section:Dropdown(text, options, default, callback)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, container)
 
-	-- Header (clickable area)
 	local header = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundTransparency = 1,
@@ -1422,7 +1578,6 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, header)
 
-	-- Indicator fully inside (AnchorPoint + negative offset = no clipping)
 	local indicator = label({
 		Size = UDim2.fromOffset(16, 16),
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1434,7 +1589,6 @@ function Section:Dropdown(text, options, default, callback)
 		ZIndex = 17,
 	}, header)
 
-	-- Expandable list
 	local listFrame = make("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
 		BackgroundTransparency = 1,
@@ -1455,7 +1609,6 @@ function Section:Dropdown(text, options, default, callback)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, listFrame)
 
-	-- Hover helpers for the closed container
 	local baseCol, hoverCol = THEME.Element, Color3.fromRGB(85, 85, 98)
 	local baseTr, hoverTr = THEME.TrElement, 0.6
 	local function setContainerHover(isHover)
@@ -1523,7 +1676,6 @@ function Section:Dropdown(text, options, default, callback)
 		if StardustUI._closeActiveDropdown == close then
 			StardustUI._closeActiveDropdown = nil
 		end
-		-- clear search so next open starts clean
 		if searchBox then
 			searchBox.Text = ""
 			filterText = ""
@@ -1533,7 +1685,6 @@ function Section:Dropdown(text, options, default, callback)
 
 	local function openDropdown()
 		if open then return end
-		-- close any other open dropdown
 		if StardustUI._closeActiveDropdown and StardustUI._closeActiveDropdown ~= close then
 			StardustUI._closeActiveDropdown()
 		end
@@ -1543,7 +1694,6 @@ function Section:Dropdown(text, options, default, callback)
 		tween(indicator, { TextColor3 = WHITE })
 		StardustUI._closeActiveDropdown = close
 
-		-- keyboard
 		selectedIdx = 1
 		updateHighlight()
 		if keyConn then keyConn:Disconnect() end
@@ -1558,6 +1708,9 @@ function Section:Dropdown(text, options, default, callback)
 					current.Text = value
 					close()
 					if callback then pcall(callback, value) end
+					if self.Tab.Window.AutoSave then
+						self.Tab.Window:SaveConfig()
+					end
 				end
 			elseif input.KeyCode == Enum.KeyCode.Up then
 				selectedIdx = math.max(1, selectedIdx - 1)
@@ -1576,7 +1729,6 @@ function Section:Dropdown(text, options, default, callback)
 		end
 		items = {}
 
-		-- Search box (only when enough options)
 		if useSearch then
 			if not searchBox then
 				searchBox = make("TextBox", {
@@ -1631,17 +1783,15 @@ function Section:Dropdown(text, options, default, callback)
 				PaddingRight = UDim.new(0, 10),
 			}, it)
 
-			-- mouse hover (keyboard highlight takes priority via updateHighlight)
 			it.MouseEnter:Connect(function()
 				if not open then return end
-				-- temporarily highlight, but keyboard can override
 				it.BackgroundColor3 = WHITE
 				it.BackgroundTransparency = 0
 				it.TextColor3 = BLACK
 			end)
 			it.MouseLeave:Connect(function()
 				if not open then return end
-				updateHighlight() -- restore correct keyboard state
+				updateHighlight()
 			end)
 
 			it.MouseButton1Click:Connect(function()
@@ -1649,6 +1799,9 @@ function Section:Dropdown(text, options, default, callback)
 				current.Text = tostring(opt)
 				close()
 				if callback then pcall(callback, value) end
+				if self.Tab.Window.AutoSave then
+					self.Tab.Window:SaveConfig()
+				end
 			end)
 
 			items[#items + 1] = it
@@ -1659,7 +1812,6 @@ function Section:Dropdown(text, options, default, callback)
 
 	rebuild()
 
-	-- Header interaction
 	header.MouseEnter:Connect(function()
 		setContainerHover(true)
 		if not open then
@@ -1681,6 +1833,11 @@ function Section:Dropdown(text, options, default, callback)
 		end
 	end)
 
+	self.Tab.Window:_register(configKey, function() return value end, function(v)
+		value = v
+		current.Text = tostring(v)
+	end)
+
 	return {
 		Set = function(_, v)
 			value = v
@@ -1694,7 +1851,6 @@ function Section:Dropdown(text, options, default, callback)
 			useSearch = #options >= 8
 			rebuild()
 			if open then
-				-- keep open but refresh
 				updateHighlight()
 			end
 		end,
@@ -1705,7 +1861,7 @@ function Section:Dropdown(text, options, default, callback)
 	}
 end
 
-function Section:Keybind(text, default, callback)
+function Section:Keybind(text, default, callback, configKey)
 	default = default or Enum.KeyCode.Unknown
 	local current = default
 	local listening = false
@@ -1752,6 +1908,16 @@ function Section:Keybind(text, default, callback)
 			btn.Text = current.Name
 			tween(btn, { BackgroundColor3 = THEME.Section, BackgroundTransparency = 0.2, TextColor3 = WHITE })
 			if callback then pcall(callback, current) end
+			if self.Tab.Window.AutoSave then
+				self.Tab.Window:SaveConfig()
+			end
+		end
+	end)
+
+	self.Tab.Window:_register(configKey, function() return current end, function(v)
+		if typeof(v) == "EnumItem" then
+			current = v
+			btn.Text = current.Name
 		end
 	end)
 
