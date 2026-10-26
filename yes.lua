@@ -219,23 +219,15 @@ local function createNightSky(parent)
 	local stars = {}
 	local function addStars(count, size, speed, baseTr, z)
 		for _ = 1, count do
-			local f = make("TextLabel", {
-				Size = UDim2.fromOffset(4, 4),
+			local f = make("Frame", {
+				Size = UDim2.fromOffset(size + 1, size + 1),
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
+				BackgroundColor3 = WHITE,
+				BackgroundTransparency = baseTr,
 				BorderSizePixel = 0,
-				Font = Enum.Font.SourceSansBold,
-				Text = "★",
-				TextColor3 = WHITE,
-				TextSize = 4,
-				TextTransparency = baseTr,
-				TextStrokeColor3 = THEME.Bg,
-				TextStrokeTransparency = 0.65,
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextYAlignment = Enum.TextYAlignment.Center,
-				TextWrapped = false,
 				ZIndex = z,
 			}, layers[z - 1])
+			corner(f, UDim.new(1, 0))
 			stars[#stars + 1] = {
 				f = f,
 				x = rng:NextNumber(), y = rng:NextNumber(),
@@ -363,7 +355,7 @@ local function createNightSky(parent)
 			local sh = math.sin(elapsed * s.tw + s.phase)
 			sh = sh > 0 and (sh ^ 0.5) or (sh * 0.35)
 			local tw = 0.5 + 0.5 * sh
-			s.f.TextTransparency = s.base + (1 - s.base) * 0.7 * tw
+			s.f.BackgroundTransparency = s.base + (1 - s.base) * 0.7 * tw
 		end
 
 		for _, sp in ipairs(sparkles) do
