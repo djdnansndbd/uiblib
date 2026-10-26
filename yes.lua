@@ -317,7 +317,7 @@ local function createNightSky(parent)
 			}),
 		}, tail)
 		local head = make("Frame", {
-			Size = UDim2.fromOffset(4, 4),
+			Size = UDim2.fromOffset(3, 3),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundColor3 = WHITE,
 			BorderSizePixel = 0, ZIndex = 4,
@@ -431,11 +431,11 @@ if not StardustUI._strokeRunning then
 				end
 				for _, glint in ipairs(effect.Glints) do
 					local pulse = math.max(0, math.sin(t * 1.5 + glint.Phase)) ^ 2
-					local transparency = 0.15 + (1 - pulse) * 0.8
+					local transparency = 0.38 + (1 - pulse) * 0.47
 					glint.Horizontal.BackgroundTransparency = transparency
 					glint.Vertical.BackgroundTransparency = transparency
-					glint.Halo.BackgroundTransparency = 0.55 + (1 - pulse) * 0.4
-					local size = 12 + pulse * 8
+					glint.Halo.BackgroundTransparency = 0.78 + (1 - pulse) * 0.16
+					local size = 10 + pulse * 5
 					glint.Frame.Size = UDim2.fromOffset(size, size)
 					glint.Frame.Rotation = t * 8 + glint.Phase
 				end
@@ -456,7 +456,7 @@ if not StardustUI._strokeRunning then
 						table.remove(effect.Shooters, i)
 					end
 				end
-				if t >= effect.NextShooter and #effect.Shooters < 2 then
+				if t >= effect.NextShooter and #effect.Shooters < 1 then
 					local startY = rng:NextNumber(0.08, 0.6)
 					local travelY = rng:NextNumber(0.24, 0.4)
 					local direction = rng:NextNumber() < 0.5 and 1 or -1
@@ -464,7 +464,7 @@ if not StardustUI._strokeRunning then
 					local travelX = direction == 1 and 0.9 or -0.9
 					local rotation = math.deg(math.atan2(travelY, travelX))
 					local tail = make("Frame", {
-						Size = UDim2.fromOffset(rng:NextInteger(58, 92), 2),
+						Size = UDim2.fromOffset(rng:NextInteger(44, 68), 1),
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						Position = UDim2.fromScale(startX, startY),
 						Rotation = rotation,
@@ -498,7 +498,7 @@ if not StardustUI._strokeRunning then
 						TravelX = travelX,
 						TravelY = travelY,
 					}
-					effect.NextShooter = t + rng:NextNumber(0.45, 0.9)
+					effect.NextShooter = t + rng:NextNumber(1.6, 2.6)
 				end
 			end
 		end
@@ -555,7 +555,7 @@ local function makeNotificationStarfield(parent)
 		Stars = {},
 		Glints = {},
 		Shooters = {},
-		NextShooter = os.clock() + rng:NextNumber(0.35, 0.75),
+		NextShooter = os.clock() + rng:NextNumber(0.8, 1.5),
 	}
 	for _ = 1, 42 do
 		local star = make("Frame", {
@@ -641,22 +641,7 @@ local function removeNotification(item)
 			break
 		end
 	end
-	if not item.Frame.Parent then return end
-
-	local fade = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	TweenService:Create(item.Frame, fade, {
-		BackgroundTransparency = 1,
-	}):Play()
-	TweenService:Create(item.Scale, fade, { Scale = 0.96 }):Play()
-	TweenService:Create(item.Badge, fade, { TextTransparency = 1 }):Play()
-	TweenService:Create(item.Title, fade, { TextTransparency = 1 }):Play()
-	TweenService:Create(item.Message, fade, { TextTransparency = 1 }):Play()
-	TweenService:Create(item.Kind, fade, { TextTransparency = 1 }):Play()
-	TweenService:Create(item.Close, fade, { TextTransparency = 1 }):Play()
-	TweenService:Create(item.Stroke, fade, { Transparency = 1 }):Play()
-	task.delay(0.2, function()
-		if item.Frame.Parent then item.Frame:Destroy() end
-	end)
+	if item.Frame.Parent then item.Frame:Destroy() end
 end
 
 function StardustUI.Notify(title, message, duration, kind)
@@ -676,15 +661,14 @@ function StardustUI.Notify(title, message, duration, kind)
 		Name = "Notification",
 		Size = UDim2.new(1, 0, 0, 104),
 		BackgroundColor3 = THEME.Bg,
-		BackgroundTransparency = 1,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		ZIndex = 1,
 		LayoutOrder = notificationOrder,
 	}, notificationRoot)
 	corner(frame, THEME.Corner)
-	local frameScale = make("UIScale", { Scale = 0.96 }, frame)
-	local frameStroke = animatedStroke(frame, 1.6, 1)
+	local frameStroke = animatedStroke(frame, 1.6, 0.12)
 	local effect = makeNotificationStarfield(frame)
 	local content = make("Frame", {
 		Name = "NotificationContent",
@@ -706,7 +690,7 @@ function StardustUI.Notify(title, message, duration, kind)
 		TextColor3 = THEME.TextMute,
 		TextSize = 9,
 		Font = THEME.FontBold,
-		TextTransparency = 1,
+		TextTransparency = 0,
 		ZIndex = 3,
 	}, header)
 	local closeButton = make("TextButton", {
@@ -720,7 +704,7 @@ function StardustUI.Notify(title, message, duration, kind)
 		TextColor3 = THEME.TextMute,
 		TextSize = 17,
 		Font = THEME.Font,
-		TextTransparency = 1,
+		TextTransparency = 0,
 		ZIndex = 3,
 	}, header)
 
@@ -747,7 +731,7 @@ function StardustUI.Notify(title, message, duration, kind)
 		TextColor3 = WHITE,
 		TextSize = 22,
 		Font = THEME.FontBold,
-		TextTransparency = 1,
+		TextTransparency = 0,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		ZIndex = 3,
 	}, body)
@@ -766,7 +750,7 @@ function StardustUI.Notify(title, message, duration, kind)
 		TextColor3 = THEME.Text,
 		TextSize = 14,
 		Font = THEME.FontBold,
-		TextTransparency = 1,
+		TextTransparency = 0,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 3,
 	}, body)
@@ -778,7 +762,7 @@ function StardustUI.Notify(title, message, duration, kind)
 		TextSize = 12,
 		TextWrapped = true,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextTransparency = 1,
+		TextTransparency = 0,
 		ZIndex = 3,
 	}, body)
 	local progress = make("Frame", {
@@ -799,7 +783,6 @@ function StardustUI.Notify(title, message, duration, kind)
 		Close = closeButton,
 		Badge = badge,
 		Stroke = frameStroke,
-		Scale = frameScale,
 		Effect = effect,
 		Closed = false,
 	}
@@ -807,17 +790,6 @@ function StardustUI.Notify(title, message, duration, kind)
 	closeButton.Activated:Connect(function()
 		removeNotification(item)
 	end)
-
-	TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 0,
-	}):Play()
-	TweenService:Create(frameScale, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-	TweenService:Create(frameStroke, THEME.Anim, { Transparency = 0.12 }):Play()
-	TweenService:Create(badge, THEME.Anim, { TextTransparency = 0 }):Play()
-	TweenService:Create(kindLabel, THEME.Anim, { TextTransparency = 0 }):Play()
-	TweenService:Create(closeButton, THEME.Anim, { TextTransparency = 0 }):Play()
-	TweenService:Create(titleLabel, THEME.Anim, { TextTransparency = 0 }):Play()
-	TweenService:Create(messageLabel, THEME.Anim, { TextTransparency = 0 }):Play()
 
 	if duration > 0 then
 		TweenService:Create(progress, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
