@@ -416,51 +416,89 @@ if not StardustUI._strokeRunning then
 				entry.grad.Rotation = (t * 70 + entry.offset) % 360
 			end
 		end
-		for _, effect in ipairs(StardustUI._notificationEffects) do
-			if effect.Frame.Parent then
+		for i = #StardustUI._notificationEffects, 1, -1 do
+			local effect = StardustUI._notificationEffects[i]
+			if not effect.Frame.Parent then
+				table.remove(StardustUI._notificationEffects, i)
+			else
 				for _, star in ipairs(effect.Stars) do
 					local pulse = 0.5 + 0.5 * math.sin(t * star.Speed + star.Phase)
 					star.Frame.BackgroundTransparency = star.BaseTransparency + (1 - star.BaseTransparency) * pulse * 0.55
 					local position = star.Frame.Position
-					local y = position.Y.Scale + star.Speed * 0.00004 * dt
+					local y = position.Y.Scale + star.Drift * dt
 					if y > 1.03 then y = -0.03 end
 					star.Frame.Position = UDim2.new(position.X.Scale, 0, y, 0)
 				end
 				for _, glint in ipairs(effect.Glints) do
-					local pulse = 0.5 + 0.5 * math.sin(t * 1.5 + glint.Phase)
-					glint.Horizontal.BackgroundTransparency = 0.25 + pulse * 0.7
-					glint.Vertical.BackgroundTransparency = 0.25 + pulse * 0.7
+					local pulse = math.max(0, math.sin(t * 1.5 + glint.Phase)) ^ 2
+					local transparency = 0.15 + (1 - pulse) * 0.8
+					glint.Horizontal.BackgroundTransparency = transparency
+					glint.Vertical.BackgroundTransparency = transparency
+					glint.Halo.BackgroundTransparency = 0.55 + (1 - pulse) * 0.4
+					local size = 12 + pulse * 8
+					glint.Frame.Size = UDim2.fromOffset(size, size)
+					glint.Frame.Rotation = t * 8 + glint.Phase
 				end
-				if effect.Shooter then
-					effect.Shooter.Age += dt
-					local shooter = effect.Shooter
-					local x = -0.12 + shooter.Age * 0.55
-					local y = 0.12 + shooter.Age * 0.34
-					shooter.Frame.Position = UDim2.fromScale(x, y)
-					shooter.Frame.BackgroundTransparency = math.clamp(shooter.Age * 0.35, 0, 0.8)
-					if shooter.Age >= 1.7 then
+				for i = #effect.Shooters, 1, -1 do
+					local shooter = effect.Shooters[i]
+					shooter.Age += dt
+					local progress = shooter.Age / shooter.Lifetime
+					shooter.Frame.Position = UDim2.fromScale(
+						shooter.StartX + progress * shooter.TravelX,
+						shooter.StartY + progress * shooter.TravelY
+					)
+					shooter.Frame.BackgroundTransparency = math.clamp(progress, 0, 0.9)
+					shooter.Head.Position = shooter.Frame.Position
+					shooter.Head.BackgroundTransparency = math.clamp(progress, 0, 0.9)
+					if progress >= 1 then
 						shooter.Frame:Destroy()
-						effect.Shooter = nil
-						effect.NextShooter = t + rng:NextNumber(2.5, 4.5)
+						shooter.Head:Destroy()
+						table.remove(effect.Shooters, i)
 					end
-				elseif t >= effect.NextShooter then
+				end
+				if t >= effect.NextShooter and #effect.Shooters < 2 then
+					local startY = rng:NextNumber(0.08, 0.6)
+					local travelY = rng:NextNumber(0.24, 0.4)
+					local direction = rng:NextNumber() < 0.5 and 1 or -1
+					local startX = direction == 1 and -0.12 or 1.12
+					local travelX = direction == 1 and 0.9 or -0.9
+					local rotation = math.deg(math.atan2(travelY, travelX))
 					local tail = make("Frame", {
-						Size = UDim2.fromOffset(72, 1),
+						Size = UDim2.fromOffset(rng:NextInteger(58, 92), 2),
 						AnchorPoint = Vector2.new(0.5, 0.5),
-						Position = UDim2.new(-0.12, 0, 0.12, 0),
-						Rotation = 22,
+						Position = UDim2.fromScale(startX, startY),
+						Rotation = rotation,
 						BackgroundColor3 = WHITE,
 						BorderSizePixel = 0,
-						ZIndex = effect.Frame.ZIndex,
+						ZIndex = 2,
 					}, effect.Frame)
 					make("UIGradient", {
 						Transparency = NumberSequence.new({
 							NumberSequenceKeypoint.new(0, 1),
-							NumberSequenceKeypoint.new(0.7, 0.2),
+							NumberSequenceKeypoint.new(0.7, 0.18),
 							NumberSequenceKeypoint.new(1, 0),
 						}),
 					}, tail)
-					effect.Shooter = { Frame = tail, Age = 0 }
+					local head = make("Frame", {
+						Size = UDim2.fromOffset(4, 4),
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.fromScale(startX, startY),
+						BackgroundColor3 = WHITE,
+						BorderSizePixel = 0,
+						ZIndex = 2,
+					}, effect.Frame)
+					corner(head, UDim.new(1, 0))
+					effect.Shooters[#effect.Shooters + 1] = {
+						Frame = tail,
+						Head = head,
+						Age = 0,
+						Lifetime = rng:NextNumber(0.8, 1.25),
+						StartX = startX,
+						StartY = startY,
+						TravelX = travelX,
+						TravelY = travelY,
+					}
+					effect.NextShooter = t + rng:NextNumber(0.45, 0.9)
 				end
 			end
 		end
@@ -516,9 +554,10 @@ local function makeNotificationStarfield(parent)
 		Frame = effectFrame,
 		Stars = {},
 		Glints = {},
-		NextShooter = os.clock() + rng:NextNumber(1.2, 2.2),
+		Shooters = {},
+		NextShooter = os.clock() + rng:NextNumber(0.35, 0.75),
 	}
-	for _ = 1, 18 do
+	for _ = 1, 42 do
 		local star = make("Frame", {
 			Size = UDim2.fromOffset(rng:NextInteger(1, 2), 1),
 			Position = UDim2.fromScale(rng:NextNumber(), rng:NextNumber()),
@@ -535,14 +574,30 @@ local function makeNotificationStarfield(parent)
 			Drift = rng:NextNumber(0.0002, 0.001),
 		}
 	end
-	for _ = 1, 2 do
+	for _ = 1, 6 do
 		local cross = make("Frame", {
-			Size = UDim2.fromOffset(12, 12),
+			Size = UDim2.fromOffset(rng:NextInteger(13, 20), rng:NextInteger(13, 20)),
 			Position = UDim2.fromScale(rng:NextNumber(0.15, 0.85), rng:NextNumber(0.2, 0.8)),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
 			ZIndex = 1,
 		}, effectFrame)
+		local halo = make("Frame", {
+			Size = UDim2.fromScale(1.5, 1.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.82,
+			BorderSizePixel = 0,
+			ZIndex = 1,
+		}, cross)
+		corner(halo, UDim.new(1, 0))
+		make("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.25),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}, halo)
 		local horizontal = make("Frame", {
 			Size = UDim2.new(1, 0, 0, 1),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -560,8 +615,10 @@ local function makeNotificationStarfield(parent)
 			BorderSizePixel = 0,
 		}, cross)
 		effect.Glints[#effect.Glints + 1] = {
+			Frame = cross,
 			Horizontal = horizontal,
 			Vertical = vertical,
+			Halo = halo,
 			Phase = rng:NextNumber(0, math.pi * 2),
 		}
 	end
@@ -577,11 +634,11 @@ local function removeNotification(item)
 			table.remove(notificationItems, i)
 			break
 		end
-		for i, effect in ipairs(StardustUI._notificationEffects) do
-			if effect == item.Effect then
-				table.remove(StardustUI._notificationEffects, i)
-				break
-			end
+	end
+	for i, effect in ipairs(StardustUI._notificationEffects) do
+		if effect == item.Effect then
+			table.remove(StardustUI._notificationEffects, i)
+			break
 		end
 	end
 	if not item.Frame.Parent then return end
@@ -591,6 +648,7 @@ local function removeNotification(item)
 		BackgroundTransparency = 1,
 	}):Play()
 	TweenService:Create(item.Scale, fade, { Scale = 0.96 }):Play()
+	TweenService:Create(item.Badge, fade, { TextTransparency = 1 }):Play()
 	TweenService:Create(item.Title, fade, { TextTransparency = 1 }):Play()
 	TweenService:Create(item.Message, fade, { TextTransparency = 1 }):Play()
 	TweenService:Create(item.Kind, fade, { TextTransparency = 1 }):Play()
@@ -616,40 +674,40 @@ function StardustUI.Notify(title, message, duration, kind)
 	notificationOrder += 1
 	local frame = make("Frame", {
 		Name = "Notification",
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = THEME.Panel,
+		Size = UDim2.new(1, 0, 0, 104),
+		BackgroundColor3 = THEME.Bg,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 24, 0, 0),
+		ClipsDescendants = true,
+		ZIndex = 1,
 		LayoutOrder = notificationOrder,
 	}, notificationRoot)
 	corner(frame, THEME.Corner)
 	local frameScale = make("UIScale", { Scale = 0.96 }, frame)
-	local frameStroke = stroke(frame, style.color, 1.2, 1)
-	make("UIPadding", {
-		PaddingTop = UDim.new(0, 11),
-		PaddingBottom = UDim.new(0, 11),
-		PaddingLeft = UDim.new(0, 13),
-		PaddingRight = UDim.new(0, 12),
-	}, frame)
-	make("UIListLayout", {
-		Padding = UDim.new(0, 5),
-		SortOrder = Enum.SortOrder.LayoutOrder,
+	local frameStroke = animatedStroke(frame, 1.6, 1)
+	local effect = makeNotificationStarfield(frame)
+	local content = make("Frame", {
+		Name = "NotificationContent",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, frame)
 
 	local header = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 17),
+		Position = UDim2.fromOffset(12, 8),
+		Size = UDim2.new(1, -24, 0, 15),
 		BackgroundTransparency = 1,
-		LayoutOrder = 1,
-	}, frame)
+		ZIndex = 2,
+	}, content)
 	local kindLabel = label({
 		Size = UDim2.new(1, -28, 1, 0),
 		Text = style.label,
-		TextColor3 = style.color,
+		TextColor3 = THEME.TextMute,
 		TextSize = 9,
 		Font = THEME.FontBold,
 		TextTransparency = 1,
+		ZIndex = 3,
 	}, header)
 	local closeButton = make("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
@@ -663,34 +721,74 @@ function StardustUI.Notify(title, message, duration, kind)
 		TextSize = 17,
 		Font = THEME.Font,
 		TextTransparency = 1,
+		ZIndex = 3,
 	}, header)
 
+	local body = make("Frame", {
+		Position = UDim2.fromOffset(12, 27),
+		Size = UDim2.new(1, -24, 0, 54),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+	}, content)
+	local badgeSurface = make("Frame", {
+		Name = "BadgeSurface",
+		Size = UDim2.fromOffset(48, 38),
+		Position = UDim2.fromOffset(0, 5),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.25,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+	}, body)
+	corner(badgeSurface, UDim.new(0, 6))
+	local badge = label({
+		Size = UDim2.fromOffset(48, 38),
+		Position = UDim2.fromOffset(0, 5),
+		Text = "✦",
+		TextColor3 = WHITE,
+		TextSize = 22,
+		Font = THEME.FontBold,
+		TextTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 3,
+	}, body)
+	make("Frame", {
+		Size = UDim2.new(0, 1, 0, 34),
+		Position = UDim2.fromOffset(58, 7),
+		BackgroundColor3 = THEME.Stroke,
+		BackgroundTransparency = 0.72,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, body)
 	local titleLabel = label({
-		Size = UDim2.new(1, 0, 0, 18),
+		Size = UDim2.new(1, -72, 0, 19),
+		Position = UDim2.fromOffset(72, 3),
 		Text = title,
 		TextColor3 = THEME.Text,
 		TextSize = 14,
 		Font = THEME.FontBold,
 		TextTransparency = 1,
-		LayoutOrder = 2,
-	}, frame)
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3,
+	}, body)
 	local messageLabel = label({
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, -72, 0, 27),
+		Position = UDim2.fromOffset(72, 24),
 		Text = message,
 		TextColor3 = THEME.TextDim,
 		TextSize = 12,
 		TextWrapped = true,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextTransparency = 1,
-		LayoutOrder = 3,
-	}, frame)
+		ZIndex = 3,
+	}, body)
 	local progress = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 2),
-		BackgroundColor3 = style.color,
-		BackgroundTransparency = 0.2,
+		Position = UDim2.new(0, 12, 1, -8),
+		Size = UDim2.new(1, -24, 0, 2),
+		BackgroundColor3 = THEME.TextDim,
+		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
-		LayoutOrder = 4,
-	}, frame)
+		ZIndex = 3,
+	}, content)
 	corner(progress, UDim.new(1, 0))
 
 	local item = {
@@ -699,8 +797,10 @@ function StardustUI.Notify(title, message, duration, kind)
 		Message = messageLabel,
 		Kind = kindLabel,
 		Close = closeButton,
+		Badge = badge,
 		Stroke = frameStroke,
 		Scale = frameScale,
+		Effect = effect,
 		Closed = false,
 	}
 	table.insert(notificationItems, item)
@@ -709,10 +809,11 @@ function StardustUI.Notify(title, message, duration, kind)
 	end)
 
 	TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-		BackgroundTransparency = THEME.TrPanel,
+		BackgroundTransparency = 0,
 	}):Play()
 	TweenService:Create(frameScale, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-	TweenService:Create(frameStroke, THEME.Anim, { Transparency = 0.25 }):Play()
+	TweenService:Create(frameStroke, THEME.Anim, { Transparency = 0.12 }):Play()
+	TweenService:Create(badge, THEME.Anim, { TextTransparency = 0 }):Play()
 	TweenService:Create(kindLabel, THEME.Anim, { TextTransparency = 0 }):Play()
 	TweenService:Create(closeButton, THEME.Anim, { TextTransparency = 0 }):Play()
 	TweenService:Create(titleLabel, THEME.Anim, { TextTransparency = 0 }):Play()
