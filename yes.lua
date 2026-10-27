@@ -29,9 +29,9 @@ local THEME = {
 	Corner    = UDim.new(0, 8),
 	Anim      = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 	AnimFast  = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-	WinW      = 580,
-	WinH      = 460,
-	TabW      = 140,
+	WinW      = 700,
+	WinH      = 540,
+	TabW      = 180,
 	TrWindow  = 0.55,
 	TrPanel   = 0.65,
 	TrSection = 0.85,
@@ -103,6 +103,16 @@ end
 
 local function tween(inst, props, info)
 	TweenService:Create(inst, info or THEME.Anim, props):Play()
+end
+
+local function getExecutorName()
+	if type(identifyexecutor) == "function" then
+		local ok, result = pcall(identifyexecutor)
+		if ok and type(result) == "string" and result ~= "" then
+			return result
+		end
+	end
+	return "Unknown"
 end
 
 local function ripple(parent, x, y)
@@ -219,15 +229,23 @@ local function createNightSky(parent)
 	local stars = {}
 	local function addStars(count, size, speed, baseTr, z)
 		for _ = 1, count do
-			local f = make("Frame", {
-				Size = UDim2.fromOffset(size + 1, size + 1),
+			local pixelSize = size + 1
+			local f = make("TextLabel", {
+				Size = UDim2.fromOffset(pixelSize, pixelSize),
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundColor3 = WHITE,
-				BackgroundTransparency = baseTr,
+				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
+				Font = Enum.Font.SourceSansBold,
+				Text = "✦",
+				TextColor3 = WHITE,
+				TextSize = pixelSize,
+				TextTransparency = baseTr,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextYAlignment = Enum.TextYAlignment.Center,
+				TextScaled = true,
 				ZIndex = z,
 			}, layers[z - 1])
-			corner(f, UDim.new(1, 0))
 			stars[#stars + 1] = {
 				f = f,
 				x = rng:NextNumber(), y = rng:NextNumber(),
@@ -355,7 +373,7 @@ local function createNightSky(parent)
 			local sh = math.sin(elapsed * s.tw + s.phase)
 			sh = sh > 0 and (sh ^ 0.5) or (sh * 0.35)
 			local tw = 0.5 + 0.5 * sh
-			s.f.BackgroundTransparency = s.base + (1 - s.base) * 0.7 * tw
+			s.f.TextTransparency = s.base + (1 - s.base) * 0.7 * tw
 		end
 
 		for _, sp in ipairs(sparkles) do
@@ -590,7 +608,7 @@ local function createNotification(title, message, duration, kind, request)
 	local badgeGlow = label({
 		Size = UDim2.fromOffset(48, 38),
 		Position = UDim2.fromOffset(0, 5),
-		Text = "★",
+		Text = "✦",
 		TextColor3 = WHITE,
 		TextSize = 28,
 		Font = Enum.Font.SourceSansBold,
@@ -604,7 +622,7 @@ local function createNotification(title, message, duration, kind, request)
 	local badge = label({
 		Size = UDim2.fromOffset(48, 38),
 		Position = UDim2.fromOffset(0, 5),
-		Text = "★",
+		Text = "✦",
 		TextColor3 = WHITE,
 		TextSize = 27,
 		Font = Enum.Font.SourceSansBold,
@@ -782,6 +800,70 @@ function StardustUI.new(opts)
 	end
 	self.Gui = sg
 	self:_build()
+
+	local homeTab = self:Tab("Home", "✦")
+	local homeSection = homeTab:Section("Welcome")
+	local serverType = "Public"
+	if game.PrivateServerId ~= "" then
+		serverType = game.PrivateServerOwnerId == 0 and "Reserved" or "Private"
+	end
+	local homeCard = homeSection:Card(
+		"Welcome, " .. player.Name,
+		"rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150",
+		{
+			{ "Game", game.Name },
+			{ "Display name", player.DisplayName },
+			{ "Account age", string.format("%d days", player.AccountAge) },
+			{ "Players", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers) },
+			{ "Place ID", tostring(game.PlaceId) },
+			{ "Server", serverType },
+			{ "Executor", getExecutorName() },
+			{ "Open/close", self.Keybind.Name },
+			{ "Session", "0:00" },
+		}
+	)
+	self.HomeTab = homeTab
+	self.HomeCard = homeCard
+
+	local sessionStartedAt = os.clock()
+	local lastSessionSecond = -1
+	table.insert(self.Updaters, function()
+		local elapsed = math.floor(os.clock() - sessionStartedAt)
+		if elapsed == lastSessionSecond then
+			return
+		end
+		lastSessionSecond = elapsed
+		local hours = math.floor(elapsed / 3600)
+		local minutes = math.floor((elapsed % 3600) / 60)
+		local seconds = elapsed % 60
+		local duration = hours > 0
+			and string.format("%d:%02d:%02d", hours, minutes, seconds)
+			or string.format("%d:%02d", minutes, seconds)
+		homeCard:SetField("Session", duration)
+	end)
+
+	local function updatePlayerCount()
+		if not self.Destroyed then
+			homeCard:SetField("Players", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers))
+		end
+	end
+	table.insert(self.Connections, Players.PlayerAdded:Connect(updatePlayerCount))
+	table.insert(self.Connections, Players.PlayerRemoving:Connect(function()
+		task.defer(updatePlayerCount)
+	end))
+
+	task.spawn(function()
+		local ok, productInfo = pcall(function()
+			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		end)
+		if ok and productInfo and type(productInfo.Name) == "string" and productInfo.Name ~= "" then
+			if not self.Destroyed then
+				homeCard:SetField("Game", productInfo.Name)
+			end
+		elseif not ok then
+			warn("[StardustUI] Could not get the experience name:", productInfo)
+		end
+	end)
 
 	if not StardustUI._running then
 		StardustUI._running = true
@@ -990,6 +1072,31 @@ function Window:_build()
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = WHITE }) end)
 	closeBtn.MouseButton1Click:Connect(function() self:_showQuitConfirm() end)
 
+	local homeBtn = make("TextButton", {
+		Name = "HomeButton",
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -68, 0, 9),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.4,
+		Text = "✦",
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 17,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 15,
+	}, top)
+	corner(homeBtn, UDim.new(0, 6))
+	animatedStroke(homeBtn, 1.2, 0.35)
+	applyHoverEffect(homeBtn, nil, THEME.Element, WHITE, 0.4, 0)
+	homeBtn.MouseEnter:Connect(function() tween(homeBtn, { TextColor3 = BLACK }) end)
+	homeBtn.MouseLeave:Connect(function() tween(homeBtn, { TextColor3 = WHITE }) end)
+	homeBtn.Activated:Connect(function()
+		if self.HomeTab then
+			self:SelectTab(self.HomeTab)
+		end
+	end)
+
 	-- TAB SIDEBAR
 	local tabListBg = make("Frame", {
 		Name = "TabListBg",
@@ -1096,13 +1203,7 @@ function Window:_build()
 		ZIndex = 15,
 	}, userProfile)
 
-	local execName = "Unknown"
-	if identifyexecutor then
-		local ok, result = pcall(identifyexecutor)
-		if ok and type(result) == "string" then
-			execName = result
-		end
-	end
+	local execName = getExecutorName()
 
 	local statsLbl = label({
 		Size = UDim2.new(1, -20, 0, 30),
@@ -1419,14 +1520,22 @@ function Window:Tab(name, icon)
 	end
 
 	local txt = label({
-		Size = UDim2.new(1, icon and -54 or -24, 1, 0),
-		Position = UDim2.new(0, icon and 44 or 12, 0, 0),
+		Size = UDim2.new(1, icon and -54 or -24, 0, 22),
+		Position = UDim2.new(0, icon and 44 or 12, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
 		Text = name,
 		TextColor3 = THEME.TextDim,
-		Font = THEME.FontBold, TextSize = 13,
-		TextTruncate = Enum.TextTruncate.AtEnd,
+		Font = THEME.FontBold,
+		TextSize = 13,
+		TextScaled = true,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.None,
 		ZIndex = 16,
 	}, btn)
+	make("UITextSizeConstraint", {
+		MinTextSize = 8,
+		MaxTextSize = 13,
+	}, txt)
 	tab.Button = btn
 	tab.ButtonText = txt
 
@@ -1588,8 +1697,10 @@ function Section:_nextOrder()
 end
 
 function Section:Card(title, avatarUrl, fields)
+	fields = fields or {}
+	local cardHeight = math.max(86, 24 + (#fields - 1) * 16 + 14 + 8)
 	local card = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 86),
+		Size = UDim2.new(1, 0, 0, cardHeight),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = THEME.TrElement,
 		BorderSizePixel = 0,
@@ -1622,6 +1733,7 @@ function Section:Card(title, avatarUrl, fields)
 	make("UITextSizeConstraint", { MaxTextSize = 14, MinTextSize = 10 }, header)
 
 	local yOffset = 24
+	local fieldLabels = {}
 	for _, field in ipairs(fields) do
 		local row = make("Frame", {
 			Size = UDim2.new(1, -70, 0, 14),
@@ -1637,21 +1749,32 @@ function Section:Card(title, avatarUrl, fields)
 			ZIndex = 16,
 		}, row)
 
-		label({
+		local valueLabel = label({
 			Size = UDim2.new(0.65, 0, 1, 0),
 			Position = UDim2.new(0.35, 0, 0, 0),
 			Text = tostring(field[2]),
 			TextSize = 11, TextColor3 = WHITE,
 			Font = THEME.FontBold,
 			TextXAlignment = Enum.TextXAlignment.Right,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 16,
 		}, row)
+		make("UITextSizeConstraint", { MinTextSize = 8, MaxTextSize = 11 }, valueLabel)
+		fieldLabels[tostring(field[1])] = valueLabel
 
 		yOffset += 16
 	end
 
 	applyHoverEffect(card, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	return {
+		SetField = function(_, fieldName, value)
+			local valueLabel = fieldLabels[tostring(fieldName)]
+			if not valueLabel then
+				return false
+			end
+			valueLabel.Text = tostring(value)
+			return true
+		end,
 		Destroy = function() card:Destroy() end,
 	}
 end
