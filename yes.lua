@@ -825,29 +825,6 @@ function StardustUI.new(opts)
 		homeCard:SetField("Session", duration)
 	end)
 
-	local function updatePlayerCount()
-		if not self.Destroyed then
-			homeCard:SetField("Players", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers))
-		end
-	end
-	table.insert(self.Connections, Players.PlayerAdded:Connect(updatePlayerCount))
-	table.insert(self.Connections, Players.PlayerRemoving:Connect(function()
-		task.defer(updatePlayerCount)
-	end))
-
-	task.spawn(function()
-		local ok, productInfo = pcall(function()
-			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-		end)
-		if ok and productInfo and type(productInfo.Name) == "string" and productInfo.Name ~= "" then
-			if not self.Destroyed then
-				homeCard:SetField("Game", productInfo.Name)
-			end
-		elseif not ok then
-			warn("[StardustUI] Could not get the experience name:", productInfo)
-		end
-	end)
-
 	if not StardustUI._running then
 		StardustUI._running = true
 		StardustUI._windows = {}
@@ -1807,6 +1784,9 @@ function Section:Card(title, avatarUrl, fields, action)
 
 	applyHoverEffect(card, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	return {
+		SetTitle = function(_, value)
+			header.Text = tostring(value)
+		end,
 		SetField = function(_, fieldName, value)
 			local valueLabel = fieldLabels[tostring(fieldName)]
 			if not valueLabel then
@@ -1890,12 +1870,7 @@ buildHomeView = function(window)
 		"Welcome, " .. player.Name,
 		"rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150",
 		{
-			{ "Game", game.Name },
 			{ "Account age", string.format("%d days", player.AccountAge) },
-			{ "Players", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers) },
-			{ "Place ID", tostring(game.PlaceId) },
-			{ "Server ID", game.JobId ~= "" and game.JobId or "Unavailable" },
-			{ "Server", serverType },
 			{ "Executor", getExecutorName() },
 			{ "Open/close", window.Keybind.Name },
 			{ "Session", "0:00" },
@@ -1926,20 +1901,51 @@ buildHomeView = function(window)
 			end,
 		}
 	)
+	local gameCard = homeSection:Card(
+		game.Name,
+		"rbxthumb://type=GameIcon&id=" .. game.GameId .. "&w=150&h=150",
+		{
+			{ "Creator", "Loading..." },
+			{ "Players here", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers) },
+			{ "Place ID", tostring(game.PlaceId) },
+			{ "Universe ID", tostring(game.GameId) },
+			{ "Server ID", game.JobId ~= "" and game.JobId or "Unavailable" },
+			{ "Server type", serverType },
+		}
+	)
 	window.HomeView = homeView
 	window.HomeViewVisible = true
 	window.HomeCard = homeCard
+	window.GameCard = gameCard
+
+	local function updateActivePlayers()
+		if not window.Destroyed then
+			gameCard:SetField("Players here", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers))
+		end
+	end
+	table.insert(window.Connections, Players.PlayerAdded:Connect(updateActivePlayers))
+	table.insert(window.Connections, Players.PlayerRemoving:Connect(function()
+		task.defer(updateActivePlayers)
+	end))
 
 	task.spawn(function()
 		local ok, productInfo = pcall(function()
 			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
 		end)
-		if ok and productInfo and type(productInfo.Name) == "string" and productInfo.Name ~= "" then
+		if ok and productInfo then
 			if not window.Destroyed then
-				homeCard:SetField("Game", productInfo.Name)
+				if type(productInfo.Name) == "string" and productInfo.Name ~= "" then
+					gameCard:SetTitle(productInfo.Name)
+				end
+				if type(productInfo.Creator) == "table" and type(productInfo.Creator.Name) == "string" then
+					gameCard:SetField("Creator", productInfo.Creator.Name)
+				else
+					gameCard:SetField("Creator", "Unavailable")
+				end
 			end
 		elseif not ok then
 			warn("[StardustUI] Could not get the experience name:", productInfo)
+			gameCard:SetField("Creator", "Unavailable")
 		end
 	end)
 end
