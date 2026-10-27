@@ -766,6 +766,7 @@ end
 ---------------------------------------------------------------------
 local Window = {}
 Window.__index = Window
+local buildHomeView
 
 function StardustUI.new(opts)
 	opts = opts or {}
@@ -801,33 +802,15 @@ function StardustUI.new(opts)
 	self.Gui = sg
 	self:_build()
 
-	local homeTab = self:Tab("Home", "✦")
-	local homeSection = homeTab:Section("Welcome")
-	local serverType = "Public"
-	if game.PrivateServerId ~= "" then
-		serverType = game.PrivateServerOwnerId == 0 and "Reserved" or "Private"
-	end
-	local homeCard = homeSection:Card(
-		"Welcome, " .. player.Name,
-		"rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150",
-		{
-			{ "Game", game.Name },
-			{ "Display name", player.DisplayName },
-			{ "Account age", string.format("%d days", player.AccountAge) },
-			{ "Players", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers) },
-			{ "Place ID", tostring(game.PlaceId) },
-			{ "Server", serverType },
-			{ "Executor", getExecutorName() },
-			{ "Open/close", self.Keybind.Name },
-			{ "Session", "0:00" },
-		}
-	)
-	self.HomeTab = homeTab
-	self.HomeCard = homeCard
+	buildHomeView(self)
+	local homeCard = self.HomeCard
 
 	local sessionStartedAt = os.clock()
 	local lastSessionSecond = -1
 	table.insert(self.Updaters, function()
+		if self.Destroyed then
+			return
+		end
 		local elapsed = math.floor(os.clock() - sessionStartedAt)
 		if elapsed == lastSessionSecond then
 			return
@@ -1078,10 +1061,7 @@ function Window:_build()
 		Position = UDim2.new(1, -68, 0, 9),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.4,
-		Text = "✦",
-		TextColor3 = WHITE,
-		Font = THEME.FontBold,
-		TextSize = 17,
+		Text = "",
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		ZIndex = 15,
@@ -1089,13 +1069,24 @@ function Window:_build()
 	corner(homeBtn, UDim.new(0, 6))
 	animatedStroke(homeBtn, 1.2, 0.35)
 	applyHoverEffect(homeBtn, nil, THEME.Element, WHITE, 0.4, 0)
-	homeBtn.MouseEnter:Connect(function() tween(homeBtn, { TextColor3 = BLACK }) end)
-	homeBtn.MouseLeave:Connect(function() tween(homeBtn, { TextColor3 = WHITE }) end)
-	homeBtn.Activated:Connect(function()
-		if self.HomeTab then
-			self:SelectTab(self.HomeTab)
-		end
-	end)
+	local homeIcon = make("Frame", {
+		Size = UDim2.fromOffset(13, 13),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, homeBtn)
+	corner(homeIcon, UDim.new(0, 2))
+	stroke(homeIcon, WHITE, 1.2, 0.05)
+	make("Frame", {
+		Size = UDim2.new(1, 0, 0, 1),
+		Position = UDim2.fromOffset(0, 3),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 17,
+	}, homeIcon)
+	homeBtn.Activated:Connect(function() self:ShowHome() end)
 
 	-- TAB SIDEBAR
 	local tabListBg = make("Frame", {
@@ -1186,7 +1177,7 @@ function Window:_build()
 	local nameLbl = label({
 		Size = UDim2.new(1, -50, 0, 14),
 		Position = UDim2.fromOffset(46, 10),
-		Text = player.DisplayName,
+		Text = player.Name,
 		Font = THEME.FontBold,
 		TextSize = 13,
 		TextScaled = true,
@@ -1195,13 +1186,22 @@ function Window:_build()
 	}, userProfile)
 	make("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 7 }, nameLbl)
 
-	make("Frame", {
-		Size = UDim2.new(1, -50, 0, 1),
+	local usernameUnderline = make("Frame", {
+		Size = UDim2.fromOffset(1, 1),
 		Position = UDim2.new(0, 46, 0, 25),
 		BackgroundColor3 = THEME.TextDim,
 		BorderSizePixel = 0,
 		ZIndex = 15,
 	}, userProfile)
+	local function updateUsernameUnderline()
+		usernameUnderline.Size = UDim2.fromOffset(
+			math.max(1, math.min(nameLbl.TextBounds.X, nameLbl.AbsoluteSize.X)),
+			1
+		)
+	end
+	table.insert(self.Connections, nameLbl:GetPropertyChangedSignal("TextBounds"):Connect(updateUsernameUnderline))
+	table.insert(self.Connections, nameLbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateUsernameUnderline))
+	task.defer(updateUsernameUnderline)
 
 	local execName = getExecutorName()
 
@@ -1583,12 +1583,16 @@ function Window:Tab(name, icon)
 	end)
 
 	table.insert(self.Tabs, tab)
-	if #self.Tabs == 1 then self:SelectTab(tab) end
+	if #self.Tabs == 1 and not self.HomeViewVisible then self:SelectTab(tab) end
 	return tab
 end
 
 function Window:SelectTab(tab)
-	if self.CurrentTab == tab then return end
+	if self.CurrentTab == tab and not self.HomeViewVisible then return end
+	self.HomeViewVisible = false
+	if self.HomeView then
+		self.HomeView.Visible = false
+	end
 	if self.CurrentTab then
 		self.CurrentTab.Holder.Visible = false
 		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
@@ -1600,6 +1604,19 @@ function Window:SelectTab(tab)
 	tween(tab.Button, { BackgroundColor3 = Color3.fromRGB(100, 100, 115), BackgroundTransparency = 0.4 })
 	tween(tab.ButtonText, { TextColor3 = WHITE })
 	tween(tab.ButtonStroke, { Transparency = 0.15 })
+end
+
+function Window:ShowHome()
+	if self.Destroyed or not self.HomeView then return end
+	if self.CurrentTab then
+		self.CurrentTab.Holder.Visible = false
+		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
+		tween(self.CurrentTab.ButtonText, { TextColor3 = THEME.TextDim })
+		tween(self.CurrentTab.ButtonStroke, { Transparency = 0.85 })
+		self.CurrentTab = nil
+	end
+	self.HomeViewVisible = true
+	self.HomeView.Visible = true
 end
 
 ---------------------------------------------------------------------
@@ -1696,9 +1713,12 @@ function Section:_nextOrder()
 	return self.Order
 end
 
-function Section:Card(title, avatarUrl, fields)
+function Section:Card(title, avatarUrl, fields, action)
 	fields = fields or {}
 	local cardHeight = math.max(86, 24 + (#fields - 1) * 16 + 14 + 8)
+	if action then
+		cardHeight += 32
+	end
 	local card = make("Frame", {
 		Size = UDim2.new(1, 0, 0, cardHeight),
 		BackgroundColor3 = THEME.Element,
@@ -1765,6 +1785,26 @@ function Section:Card(title, avatarUrl, fields)
 		yOffset += 16
 	end
 
+	if action then
+		local actionButton = make("TextButton", {
+			Size = UDim2.new(1, -70, 0, 26),
+			Position = UDim2.fromOffset(64, yOffset + 2),
+			BackgroundColor3 = THEME.Section,
+			BackgroundTransparency = 0.15,
+			Text = action.Text,
+			TextColor3 = WHITE,
+			Font = THEME.FontBold,
+			TextSize = 11,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			ZIndex = 16,
+		}, card)
+		corner(actionButton, UDim.new(0, 5))
+		stroke(actionButton, WHITE, 1, 0.7)
+		applyHoverEffect(actionButton, nil, THEME.Section, Color3.fromRGB(100, 100, 115), 0.15, 0)
+		actionButton.Activated:Connect(action.Callback)
+	end
+
 	applyHoverEffect(card, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	return {
 		SetField = function(_, fieldName, value)
@@ -1777,6 +1817,131 @@ function Section:Card(title, avatarUrl, fields)
 		end,
 		Destroy = function() card:Destroy() end,
 	}
+end
+
+buildHomeView = function(window)
+	local homeView = make("Frame", {
+		Name = "WelcomeView",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = true,
+		ZIndex = 14,
+	}, window.Content)
+	local scroll = make("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 2,
+		ScrollBarImageColor3 = WHITE,
+		ScrollBarImageTransparency = 0.5,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 14,
+	}, homeView)
+	make("UIPadding", {
+		PaddingTop = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 16),
+	}, scroll)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, scroll)
+
+	local sectionFrame = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Section,
+		BackgroundTransparency = THEME.TrSection,
+		BorderSizePixel = 0,
+		LayoutOrder = 1,
+		ZIndex = 15,
+	}, scroll)
+	corner(sectionFrame, UDim.new(0, 8))
+	animatedStroke(sectionFrame, 1.5, 0.4)
+	make("UIPadding", {
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 10),
+		PaddingRight = UDim.new(0, 10),
+	}, sectionFrame)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, sectionFrame)
+	local heading = label({
+		Size = UDim2.new(1, 0, 0, 18),
+		Text = "WELCOME",
+		Font = THEME.FontBold,
+		TextSize = 11,
+		TextColor3 = THEME.TextDim,
+		LayoutOrder = 0,
+		ZIndex = 16,
+	}, sectionFrame)
+
+	local serverType = "Public"
+	if game.PrivateServerId ~= "" then
+		serverType = game.PrivateServerOwnerId == 0 and "Reserved" or "Private"
+	end
+	local homeSection = setmetatable({ Frame = sectionFrame, Order = 0 }, Section)
+	local homeCard = homeSection:Card(
+		"Welcome, " .. player.Name,
+		"rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150",
+		{
+			{ "Game", game.Name },
+			{ "Account age", string.format("%d days", player.AccountAge) },
+			{ "Players", string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers) },
+			{ "Place ID", tostring(game.PlaceId) },
+			{ "Server ID", game.JobId ~= "" and game.JobId or "Unavailable" },
+			{ "Server", serverType },
+			{ "Executor", getExecutorName() },
+			{ "Open/close", window.Keybind.Name },
+			{ "Session", "0:00" },
+		},
+		{
+			Text = "Copy server join code",
+			Callback = function()
+				if game.JobId == "" then
+					window:Notify("Copy unavailable", "This session does not have a server JobId.", 5, "warning")
+					return
+				end
+				local copyFunction = setclipboard
+				if type(copyFunction) ~= "function" then
+					window:Notify("Clipboard unavailable", "Your environment does not provide setclipboard.", 5, "warning")
+					return
+				end
+				local code = string.format(
+					'game:GetService("TeleportService"):TeleportToPlaceInstance(%d, %q, game.Players.LocalPlayer)',
+					game.PlaceId,
+					game.JobId
+				)
+				local ok, err = pcall(copyFunction, code)
+				if not ok then
+					window:Notify("Copy failed", tostring(err), 5, "error")
+					return
+				end
+				window:Notify("Server join code copied", "The code is ready to paste.", 4, "success")
+			end,
+		}
+	)
+	window.HomeView = homeView
+	window.HomeViewVisible = true
+	window.HomeCard = homeCard
+
+	task.spawn(function()
+		local ok, productInfo = pcall(function()
+			return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		end)
+		if ok and productInfo and type(productInfo.Name) == "string" and productInfo.Name ~= "" then
+			if not window.Destroyed then
+				homeCard:SetField("Game", productInfo.Name)
+			end
+		elseif not ok then
+			warn("[StardustUI] Could not get the experience name:", productInfo)
+		end
+	end)
 end
 
 ---------------------------------------------------------------------
