@@ -1375,33 +1375,52 @@ function Window:Tab(name, icon)
 	}, self.TabScroll)
 	corner(btn, UDim.new(0, 6))
 	tab.ButtonStroke, tab.ButtonGrad = animatedStroke(btn, 1.2, 0.85)
-	make("UIPadding", { PaddingLeft = UDim.new(0, icon and 36 or 12) }, btn)
 	if icon then
 		local iconText = tostring(icon)
+		local iconSlot = make("Frame", {
+			Size = UDim2.fromOffset(28, 32),
+			Position = UDim2.fromOffset(3, 0),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ZIndex = 16,
+		}, btn)
 		if type(icon) == "number" or iconText:match("^rbxassetid://") then
 			make("ImageLabel", {
 				Size = UDim2.fromOffset(18, 18),
-				Position = UDim2.fromOffset(10, 7),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
 				BackgroundTransparency = 1,
 				Image = type(icon) == "number" and ("rbxassetid://" .. iconText) or iconText,
 				ImageColor3 = WHITE,
-				ZIndex = 16,
-			}, btn)
+				ScaleType = Enum.ScaleType.Fit,
+				ZIndex = 17,
+			}, iconSlot)
 		else
 			label({
-				Size = UDim2.fromOffset(20, 22),
-				Position = UDim2.fromOffset(8, 5),
+				Size = UDim2.fromScale(1, 1),
 				Text = iconText,
-				TextColor3 = THEME.TextDim,
-				TextSize = 15,
+				TextColor3 = WHITE,
+				Font = Enum.Font.SourceSansBold,
+				TextSize = 17,
 				TextXAlignment = Enum.TextXAlignment.Center,
-				ZIndex = 16,
-			}, btn)
+				TextYAlignment = Enum.TextYAlignment.Center,
+				ZIndex = 17,
+			}, iconSlot)
 		end
+		make("Frame", {
+			Size = UDim2.new(0, 1, 0, 16),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 34, 0.5, 0),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.75,
+			BorderSizePixel = 0,
+			ZIndex = 16,
+		}, btn)
 	end
 
 	local txt = label({
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, icon and -54 or -24, 1, 0),
+		Position = UDim2.new(0, icon and 44 or 12, 0, 0),
 		Text = name,
 		TextColor3 = THEME.TextDim,
 		Font = THEME.FontBold, TextSize = 13,
