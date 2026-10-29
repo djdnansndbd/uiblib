@@ -68,13 +68,13 @@ local THEME_PRESETS = {
 		TextMute = Color3.fromRGB(120, 166, 178),
 	},
 	["Crimson"] = {
-		Bg = Color3.fromRGB(38, 18, 24),
-		Panel = Color3.fromRGB(54, 25, 34),
-		Section = Color3.fromRGB(73, 33, 45),
-		Element = Color3.fromRGB(94, 43, 56),
-		Text = Color3.fromRGB(255, 242, 244),
-		TextDim = Color3.fromRGB(224, 184, 192),
-		TextMute = Color3.fromRGB(160, 112, 122),
+		Bg = Color3.fromRGB(36, 12, 12),
+		Panel = Color3.fromRGB(55, 15, 16),
+		Section = Color3.fromRGB(78, 20, 20),
+		Element = Color3.fromRGB(103, 27, 25),
+		Text = Color3.fromRGB(255, 244, 244),
+		TextDim = Color3.fromRGB(224, 190, 190),
+		TextMute = Color3.fromRGB(160, 108, 108),
 	},
 	["Emerald"] = {
 		Bg = Color3.fromRGB(16, 34, 27),
@@ -201,6 +201,10 @@ local function applyTheme(window, themeName)
 	for _, instance in ipairs(window.Gui:GetDescendants()) do
 		if instance:IsA("GuiObject") then
 			instance.BackgroundColor3 = recolor(instance.BackgroundColor3)
+			if instance:IsA("TextButton")
+				and (instance.Name == "CloseButton" or instance.Name == "HomeButton" or instance.Name == "SettingsButton") then
+				instance.BackgroundColor3 = preset.Element
+			end
 		end
 		if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
 			if instance.TextColor3 == oldText then
@@ -320,14 +324,18 @@ local function ripple(parent, x, y)
 end
 
 local function applyHoverEffect(btn, isSelectedFunc, baseColor, hoverColor, baseTr, hoverTr, strokeObj, baseStrTr, hoverStrTr)
+	local function resolveColor(color)
+		return type(color) == "function" and color() or color
+	end
+
 	btn.MouseEnter:Connect(function()
 		if isSelectedFunc and isSelectedFunc() then return end
-		tween(btn, { BackgroundColor3 = hoverColor, BackgroundTransparency = hoverTr }, THEME.AnimFast)
+		tween(btn, { BackgroundColor3 = resolveColor(hoverColor), BackgroundTransparency = hoverTr }, THEME.AnimFast)
 		if strokeObj then tween(strokeObj, { Transparency = hoverStrTr }, THEME.AnimFast) end
 	end)
 	btn.MouseLeave:Connect(function()
 		if isSelectedFunc and isSelectedFunc() then return end
-		tween(btn, { BackgroundColor3 = baseColor, BackgroundTransparency = baseTr }, THEME.AnimFast)
+		tween(btn, { BackgroundColor3 = resolveColor(baseColor), BackgroundTransparency = baseTr }, THEME.AnimFast)
 		if strokeObj then tween(strokeObj, { Transparency = baseStrTr }, THEME.AnimFast) end
 	end)
 end
@@ -1365,6 +1373,7 @@ function Window:_build()
 	self.Top = top
 
 	local closeBtn = make("TextButton", {
+		Name = "CloseButton",
 		Size = UDim2.fromOffset(28, 28),
 		Position = UDim2.new(1, -36, 0, 9),
 		BackgroundColor3 = THEME.Element,
@@ -1377,7 +1386,7 @@ function Window:_build()
 	}, top)
 	corner(closeBtn, UDim.new(0, 6))
 	animatedStroke(closeBtn, 1.4, 0.2)
-	applyHoverEffect(closeBtn, nil, THEME.Element, WHITE, 0.4, 0)
+	applyHoverEffect(closeBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
 	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { TextColor3 = BLACK }) end)
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = WHITE }) end)
 	closeBtn.MouseButton1Click:Connect(function() self:_showQuitConfirm() end)
@@ -1398,7 +1407,7 @@ function Window:_build()
 	}, top)
 	corner(homeBtn, UDim.new(0, 6))
 	animatedStroke(homeBtn, 1.2, 0.35)
-	applyHoverEffect(homeBtn, nil, THEME.Element, WHITE, 0.4, 0)
+	applyHoverEffect(homeBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
 	homeBtn.Activated:Connect(function() self:ShowHome() end)
 
 	local settingsBtn = make("TextButton", {
@@ -1417,7 +1426,7 @@ function Window:_build()
 	}, top)
 	corner(settingsBtn, UDim.new(0, 6))
 	animatedStroke(settingsBtn, 1.2, 0.35)
-	applyHoverEffect(settingsBtn, nil, THEME.Element, WHITE, 0.4, 0)
+	applyHoverEffect(settingsBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
 	settingsBtn.Activated:Connect(function() self:ShowSettings() end)
 
 	-- TAB SIDEBAR
