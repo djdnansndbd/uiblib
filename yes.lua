@@ -1464,14 +1464,16 @@ function Window:_build()
 
 	local closeBtn = make("TextButton", {
 		Name = "CloseButton",
-		Size = UDim2.fromOffset(28, 28),
-		Position = UDim2.new(1, -36, 0, 9),
+		Size = UDim2.fromOffset(24, 24),
+		Position = UDim2.new(1, -32, 0, 11),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.4,
 		Text = "×",
 		TextColor3 = WHITE,
-		Font = THEME.FontBold, TextSize = 18,
-		BorderSizePixel = 0, AutoButtonColor = false,
+		Font = THEME.FontBold,
+		TextSize = 16,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
 		ZIndex = 15,
 	}, top)
 	corner(closeBtn, UDim.new(0, 6))
@@ -1484,14 +1486,14 @@ function Window:_build()
 
 	local homeBtn = make("TextButton", {
 		Name = "HomeButton",
-		Size = UDim2.fromOffset(28, 28),
-		Position = UDim2.new(1, -68, 0, 9),
+		Size = UDim2.fromOffset(24, 24),
+		Position = UDim2.new(1, -60, 0, 11),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.4,
 		Text = "★",
 		TextColor3 = WHITE,
 		Font = THEME.FontBold,
-		TextSize = 18,
+		TextSize = 15,
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		ZIndex = 15,
@@ -1504,52 +1506,41 @@ function Window:_build()
 
 	local settingsBtn = make("TextButton", {
 		Name = "SettingsButton",
-		Size = UDim2.fromOffset(28, 28),
-		Position = UDim2.new(1, -100, 0, 9),
+		Size = UDim2.fromOffset(24, 24),
+		Position = UDim2.new(1, -88, 0, 11),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.4,
 		Text = "",
 		TextColor3 = WHITE,
 		Font = THEME.FontBold,
-		TextSize = 17,
+		TextSize = 15,
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		ZIndex = 15,
 	}, top)
 	corner(settingsBtn, UDim.new(0, 6))
 	self.SettingsButton = settingsBtn
-	for index = 0, 7 do
-		local angle = math.rad(index * 45)
-		local spoke = make("Frame", {
-			Size = UDim2.fromOffset(4, 6),
+	for index, knobX in ipairs({ 7, 15, 10 }) do
+		local y = 7 + (index - 1) * 5
+		local rail = make("Frame", {
+			Size = UDim2.fromOffset(12, 1),
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(14 + math.cos(angle) * 6, 14 + math.sin(angle) * 6),
-			Rotation = index * 45,
+			Position = UDim2.fromOffset(12, y),
 			BackgroundColor3 = WHITE,
 			BorderSizePixel = 0,
 			ZIndex = 16,
 		}, settingsBtn)
-		corner(spoke, UDim.new(0, 1))
+		corner(rail, UDim.new(1, 0))
+		local knob = make("Frame", {
+			Size = UDim2.fromOffset(4, 4),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(knobX, y),
+			BackgroundColor3 = WHITE,
+			BorderSizePixel = 0,
+			ZIndex = 17,
+		}, settingsBtn)
+		corner(knob, UDim.new(1, 0))
 	end
-	local gearRing = make("Frame", {
-		Size = UDim2.fromOffset(12, 12),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 17,
-	}, settingsBtn)
-	corner(gearRing, UDim.new(1, 0))
-	stroke(gearRing, WHITE, 2, 0)
-	local gearHub = make("Frame", {
-		Size = UDim2.fromOffset(4, 4),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		ZIndex = 18,
-	}, settingsBtn)
-	corner(gearHub, UDim.new(1, 0))
 	animatedStroke(settingsBtn, 1.2, 0.35)
 	applyHoverEffect(settingsBtn, nil, function() return THEME.Element end, function() return THEME.Element end, 0.4, 0.2)
 	settingsBtn.Activated:Connect(function() self:ShowSettings() end)
