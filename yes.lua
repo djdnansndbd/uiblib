@@ -300,19 +300,80 @@ end
 -- CONFIG HELPERS
 ---------------------------------------------------------------------
 local function safeWrite(path, data)
-	if writefile then
-		local ok = pcall(writefile, path, data)
-		return ok
+	if type(writefile) == "function" then
+		local ok, err = pcall(writefile, path, data)
+		return ok, err
 	end
-	return false
+	return false, "writefile unavailable"
 end
 
 local function safeRead(path)
-	if readfile and isfile and isfile(path) then
-		local ok, content = pcall(readfile, path)
-		if ok then return content end
+	if type(readfile) ~= "function" then return nil end
+	if type(isfile) == "function" then
+		local ok, exists = pcall(isfile, path)
+		if ok and not exists then return nil end
 	end
+	local ok, content = pcall(readfile, path)
+	if ok then return content end
 	return nil
+end
+
+local PERSISTENT_SETTINGS_FOLDER = "StardustConfigs"
+local PERSISTENT_SETTINGS_PATH = PERSISTENT_SETTINGS_FOLDER .. "/.stardust_settings.json"
+
+local function loadPersistentSettings()
+	local content = safeRead(PERSISTENT_SETTINGS_PATH)
+	if not content then return {} end
+	local ok, settings = pcall(function()
+		return HttpService:JSONDecode(content)
+	end)
+	if ok and type(settings) == "table" then
+		return settings
+	end
+	warn("[StardustUI] Could not decode saved settings.")
+	return {}
+end
+
+local function loadLegacyConfigSettings(configFolder, configName)
+	if type(configFolder) ~= "string" or type(configName) ~= "string" then
+		return {}
+	end
+	local content = safeRead(configFolder .. "/" .. configName .. ".json")
+	if not content then return {} end
+	local ok, settings = pcall(function()
+		return HttpService:JSONDecode(content)
+	end)
+	if ok and type(settings) == "table" then
+		return settings
+	end
+	return {}
+end
+
+local function savePersistentSettings(settings)
+	local settingsFolderExists = false
+	if type(isfolder) == "function" then
+		local ok, result = pcall(isfolder, PERSISTENT_SETTINGS_FOLDER)
+		settingsFolderExists = ok and result == true
+	end
+	if type(makefolder) == "function" and not settingsFolderExists then
+		local ok, err = pcall(makefolder, PERSISTENT_SETTINGS_FOLDER)
+		if not ok then
+			warn("[StardustUI] Could not create settings folder:", err)
+		end
+	end
+	local ok, encoded = pcall(function()
+		return HttpService:JSONEncode(settings)
+	end)
+	if not ok then
+		warn("[StardustUI] Could not encode saved settings:", encoded)
+		return false
+	end
+	local written, writeError = safeWrite(PERSISTENT_SETTINGS_PATH, encoded)
+	if not written then
+		warn("[StardustUI] Could not write saved settings:", tostring(writeError))
+		return false
+	end
+	return true
 end
 
 local function serialize(value)
@@ -944,11 +1005,42 @@ function StardustUI.new(opts)
 	self._configElements = {}
 
 	-- Config
-	self.ConfigName   = opts.ConfigName or self.Title:gsub("%s+", "")
-	self.ConfigFolder = opts.ConfigFolder or "StardustConfigs"
-	self.AutoLoad     = opts.AutoLoad ~= false   -- default true
-	self.AutoSave     = opts.AutoSave ~= false   -- default true
-	self.ThemeName = THEME_PRESETS[opts.ThemeName] and opts.ThemeName or "Stardust"
+	local savedSettings = loadPersistentSettings()
+	local savedConfigName = type(savedSettings.ConfigName) == "string" and savedSettings.ConfigName or nil
+	local savedConfigFolder = type(savedSettings.ConfigFolder) == "string" and savedSettings.ConfigFolder or nil
+	local fallbackConfigName = opts.ConfigName or self.Title:gsub("%s+", "")
+	local fallbackConfigFolder = opts.ConfigFolder or "StardustConfigs"
+	local legacySettings = loadLegacyConfigSettings(
+		savedConfigFolder or fallbackConfigFolder,
+		savedConfigName or fallbackConfigName
+	)
+	for _, key in ipairs({ "AutoLoad", "AutoSave" }) do
+		if savedSettings[key] == nil and legacySettings["__Stardust" .. key] ~= nil then
+			savedSettings[key] = legacySettings["__Stardust" .. key]
+		end
+	end
+	if savedSettings.ThemeName == nil and type(legacySettings.__StardustTheme) == "string" then
+		savedSettings.ThemeName = legacySettings.__StardustTheme
+	end
+	self.ConfigName = savedConfigName or opts.ConfigName or self.Title:gsub("%s+", "")
+	self.ConfigFolder = savedConfigFolder or opts.ConfigFolder or "StardustConfigs"
+	if type(savedSettings.AutoLoad) == "boolean" then
+		self.AutoLoad = savedSettings.AutoLoad
+	else
+		self.AutoLoad = opts.AutoLoad
+	end
+	if self.AutoLoad == nil then self.AutoLoad = true end
+	if type(savedSettings.AutoSave) == "boolean" then
+		self.AutoSave = savedSettings.AutoSave
+	else
+		self.AutoSave = opts.AutoSave
+	end
+	if self.AutoSave == nil then self.AutoSave = true end
+	local savedTheme = type(savedSettings.ThemeName) == "string" and savedSettings.ThemeName or "Stardust"
+	self.ThemeName = THEME_PRESETS[savedTheme] and savedTheme or opts.ThemeName
+	if not THEME_PRESETS[self.ThemeName] then
+		self.ThemeName = "Stardust"
+	end
 	for key, value in pairs(THEME_PRESETS[self.ThemeName]) do
 		THEME[key] = value
 	end
@@ -1011,12 +1103,16 @@ function StardustUI.new(opts)
 	end
 	self._cleanupCallback = cleanup
 	_G[windowCleanupKey] = cleanup
+	self:SavePersistentSettings()
 
 	-- Auto-load after elements have a chance to register
 	if self.AutoLoad then
 		task.defer(function()
 			task.wait(0.2)
-			self:LoadConfig()
+			local loaded, err = self:LoadConfig()
+			if not loaded then
+				warn("[StardustUI] Could not auto-load config:", self:GetConfigPath(), err)
+			end
 		end)
 	end
 
@@ -1027,7 +1123,18 @@ function Window:_getConfigPath()
 	return self.ConfigFolder .. "/" .. self.ConfigName .. ".json"
 end
 
+function Window:SavePersistentSettings()
+	return savePersistentSettings({
+		ConfigName = self.ConfigName,
+		ConfigFolder = self.ConfigFolder,
+		ThemeName = self.ThemeName,
+		AutoSave = self.AutoSave,
+		AutoLoad = self.AutoLoad,
+	})
+end
+
 function Window:SaveConfig()
+	local settingsSaved = self:SavePersistentSettings()
 	local data = {}
 	for key, entry in pairs(self._configElements) do
 		local ok, value = pcall(entry.Get)
@@ -1047,6 +1154,9 @@ function Window:SaveConfig()
 	end
 
 	if safeWrite(path, encoded) then
+		if not settingsSaved then
+			return false, "config saved but startup settings could not be saved"
+		end
 		return true, path
 	end
 	return false, "writefile not available"
@@ -1069,12 +1179,6 @@ function Window:LoadConfig()
 	if type(data.__StardustTheme) == "string" then
 		self:SetTheme(data.__StardustTheme)
 	end
-	if type(data.__StardustAutoSave) == "boolean" then
-		self.AutoSave = data.__StardustAutoSave
-	end
-	if type(data.__StardustAutoLoad) == "boolean" then
-		self.AutoLoad = data.__StardustAutoLoad
-	end
 	for key, raw in pairs(data) do
 		if string.sub(key, 1, 10) ~= "__Stardust" then
 			local entry = self._configElements[key]
@@ -1084,11 +1188,21 @@ function Window:LoadConfig()
 			end
 		end
 	end
+	if not self:SavePersistentSettings() then
+		return false, "config loaded but startup settings could not be saved"
+	end
+	if self.RefreshSettings then
+		self:RefreshSettings()
+	end
 	return true
 end
 
 function Window:SetTheme(themeName)
-	return applyTheme(self, themeName)
+	if not applyTheme(self, themeName) then
+		return false
+	end
+	self:SavePersistentSettings()
+	return true
 end
 
 function Window:DeleteConfig()
@@ -1232,7 +1346,10 @@ function Window:_build()
 		Position = UDim2.new(1, -68, 0, 9),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.4,
-		Text = "",
+		Text = "★",
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 18,
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		ZIndex = 15,
@@ -1240,23 +1357,6 @@ function Window:_build()
 	corner(homeBtn, UDim.new(0, 6))
 	animatedStroke(homeBtn, 1.2, 0.35)
 	applyHoverEffect(homeBtn, nil, THEME.Element, WHITE, 0.4, 0)
-	local homeIcon = make("Frame", {
-		Size = UDim2.fromOffset(13, 13),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 16,
-	}, homeBtn)
-	corner(homeIcon, UDim.new(0, 2))
-	stroke(homeIcon, WHITE, 1.2, 0.05)
-	make("Frame", {
-		Size = UDim2.new(1, 0, 0, 1),
-		Position = UDim2.fromOffset(0, 3),
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		ZIndex = 17,
-	}, homeIcon)
 	homeBtn.Activated:Connect(function() self:ShowHome() end)
 
 	local settingsBtn = make("TextButton", {
@@ -1796,6 +1896,9 @@ end
 
 function Window:SelectTab(tab)
 	if self.CurrentTab == tab and not self.HomeViewVisible then return end
+	if self.CloseSettingsPicker then
+		self:CloseSettingsPicker()
+	end
 	self.HomeViewVisible = false
 	if self.HomeView then
 		self.HomeView.Visible = false
@@ -1818,6 +1921,9 @@ end
 
 function Window:ShowHome()
 	if self.Destroyed or not self.HomeView then return end
+	if self.CloseSettingsPicker then
+		self:CloseSettingsPicker()
+	end
 	if self.CurrentTab then
 		self.CurrentTab.Holder.Visible = false
 		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
@@ -1834,6 +1940,9 @@ end
 
 function Window:ShowSettings()
 	if self.Destroyed or not self.SettingsView then return end
+	if self.CloseSettingsPicker then
+		self:CloseSettingsPicker()
+	end
 	if self.CurrentTab then
 		self.CurrentTab.Holder.Visible = false
 		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
@@ -2304,7 +2413,7 @@ buildSettingsView = function(window)
 		end)
 	end
 
-	local configCard = createCard("Configuration", 226)
+	local configCard = createCard("Configuration", 230)
 	local function makeInput(caption, y, initialValue)
 		label({
 			Size = UDim2.new(0.3, 0, 0, 26),
@@ -2338,18 +2447,202 @@ buildSettingsView = function(window)
 	end
 	local nameInput = makeInput("Config name", 24, window.ConfigName)
 	local folderInput = makeInput("Config folder", 58, window.ConfigFolder)
+	local folderPicker = make("TextButton", {
+		Size = UDim2.new(0.48, -3, 0, 26),
+		Position = UDim2.fromOffset(0, 90),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.2,
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 10,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 16,
+	}, configCard)
+	corner(folderPicker, UDim.new(0, 5))
+	local configPicker = make("TextButton", {
+		Size = UDim2.new(0.48, -3, 0, 26),
+		Position = UDim2.new(0.52, 3, 0, 90),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.2,
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 10,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 16,
+	}, configCard)
+	corner(configPicker, UDim.new(0, 5))
 	local status = label({
 		Size = UDim2.new(1, 0, 0, 16),
-		Position = UDim2.fromOffset(0, 90),
+		Position = UDim2.fromOffset(0, 120),
 		Text = "",
 		TextSize = 10,
 		TextColor3 = THEME.TextDim,
 		ZIndex = 16,
 	}, configCard)
 
+	local activePicker
+	local function closePicker()
+		if activePicker then
+			activePicker:Destroy()
+			activePicker = nil
+		end
+	end
+	local function showPicker(button, options, onSelected)
+		closePicker()
+		if #options == 0 then
+			status.Text = "No saved entries found; enter a name or folder above."
+			return
+		end
+		local picker = make("ScrollingFrame", {
+			Size = UDim2.fromOffset(220, math.min(#options, 5) * 28 + 6),
+			BackgroundColor3 = THEME.Panel,
+			BorderSizePixel = 0,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 4,
+			ScrollBarImageColor3 = THEME.TextMute,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			ZIndex = 200,
+		}, window.Gui)
+		activePicker = picker
+		corner(picker, UDim.new(0, 5))
+		stroke(picker, WHITE, 1, 0.65)
+		make("UIPadding", {
+			PaddingTop = UDim.new(0, 3),
+			PaddingBottom = UDim.new(0, 3),
+			PaddingLeft = UDim.new(0, 3),
+			PaddingRight = UDim.new(0, 3),
+		}, picker)
+		make("UIListLayout", {
+			Padding = UDim.new(0, 2),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, picker)
+		for index, option in ipairs(options) do
+			local optionButton = make("TextButton", {
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundColor3 = THEME.Element,
+				BackgroundTransparency = 0.15,
+				Text = option,
+				TextColor3 = THEME.Text,
+				Font = THEME.Font,
+				TextSize = 11,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				LayoutOrder = index,
+				ZIndex = 201,
+			}, picker)
+			make("UIPadding", {
+				PaddingLeft = UDim.new(0, 8),
+				PaddingRight = UDim.new(0, 8),
+			}, optionButton)
+			optionButton.Activated:Connect(function()
+				closePicker()
+				onSelected(option)
+			end)
+		end
+		task.defer(function()
+			if not picker.Parent then return end
+			local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
+			local position = button.AbsolutePosition
+			local width = math.min(math.max(180, button.AbsoluteSize.X), viewport.X - 8)
+			local height = picker.AbsoluteSize.Y
+			local x = math.clamp(position.X, 4, math.max(4, viewport.X - width - 4))
+			local y = position.Y + button.AbsoluteSize.Y + 3
+			if y + height > viewport.Y - 4 then
+				y = position.Y - height - 3
+			end
+			picker.Size = UDim2.fromOffset(width, height)
+			picker.Position = UDim2.fromOffset(
+				x,
+				math.clamp(y, 4, math.max(4, viewport.Y - height - 4))
+			)
+		end)
+	end
+
+	local function listPaths(path)
+		if type(listfiles) ~= "function" then
+			return {}
+		end
+		local ok, paths = pcall(listfiles, path)
+		if not ok or type(paths) ~= "table" then
+			return {}
+		end
+		return paths
+	end
+	local function normalizedPath(path)
+		return (string.gsub(tostring(path), "\\", "/"))
+	end
+	local function getFolderOptions()
+		local folders = { PERSISTENT_SETTINGS_FOLDER }
+		for _, path in ipairs(listPaths(PERSISTENT_SETTINGS_FOLDER)) do
+			local isDirectory = false
+			if type(isfolder) == "function" then
+				local ok, result = pcall(isfolder, path)
+				isDirectory = ok and result == true
+			end
+			if isDirectory then
+				folders[#folders + 1] = normalizedPath(path)
+			end
+		end
+		local current = normalizedPath(window.ConfigFolder)
+		if not table.find(folders, current) then
+			folders[#folders + 1] = current
+		end
+		table.sort(folders)
+		return folders
+	end
+	local function getConfigOptions()
+		local configs = {}
+		for _, path in ipairs(listPaths(window.ConfigFolder)) do
+			local fileName = normalizedPath(path):match("([^/]+)$") or tostring(path)
+			local lowerName = string.lower(fileName)
+			if lowerName:sub(-5) == ".json" and lowerName ~= ".stardust_settings.json" then
+				configs[#configs + 1] = fileName:sub(1, -6)
+			end
+		end
+		if not table.find(configs, window.ConfigName) then
+			configs[#configs + 1] = window.ConfigName
+		end
+		table.sort(configs)
+		return configs
+	end
+	local function refreshPickerLabels()
+		folderPicker.Text = "Folder: " .. window.ConfigFolder .. "  v"
+		configPicker.Text = "Saved config: " .. window.ConfigName .. "  v"
+	end
+	local function refreshConfigList()
+		refreshPickerLabels()
+	end
+	folderPicker.Activated:Connect(function()
+		showPicker(folderPicker, getFolderOptions(), function(folder)
+			window.ConfigFolder = folder
+			folderInput.Text = folder
+			if not window:SavePersistentSettings() then
+				status.Text = "Folder selected, but startup settings could not be saved."
+			end
+			refreshConfigList()
+		end)
+	end)
+	configPicker.Activated:Connect(function()
+		showPicker(configPicker, getConfigOptions(), function(configName)
+			window.ConfigName = configName
+			nameInput.Text = configName
+			if not window:SavePersistentSettings() then
+				status.Text = "Config selected, but startup settings could not be saved."
+			end
+			refreshPickerLabels()
+		end)
+	end)
+
 	local autoSaveButton = make("TextButton", {
 		Size = UDim2.new(0.49, 0, 0, 28),
-		Position = UDim2.fromOffset(0, 112),
+		Position = UDim2.fromOffset(0, 142),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.2,
 		TextColor3 = WHITE,
@@ -2362,7 +2655,7 @@ buildSettingsView = function(window)
 	corner(autoSaveButton, UDim.new(0, 5))
 	local autoLoadButton = make("TextButton", {
 		Size = UDim2.new(0.49, 0, 0, 28),
-		Position = UDim2.new(0.51, 0, 0, 112),
+		Position = UDim2.new(0.51, 0, 0, 142),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.2,
 		TextColor3 = WHITE,
@@ -2380,6 +2673,7 @@ buildSettingsView = function(window)
 		for name, button in pairs(themeButtons) do
 			button.Text = name == window.ThemeName and (name .. " ✓") or name
 		end
+		refreshPickerLabels()
 	end
 	window.RefreshSettings = refresh
 	autoSaveButton.Activated:Connect(function()
@@ -2402,14 +2696,20 @@ buildSettingsView = function(window)
 			status.Text = "Config name and folder cannot be empty."
 			return false
 		end
+		if configName:find("/", 1, true) or configName:find("\\", 1, true) or configName:find("..", 1, true) then
+			status.Text = "Config name cannot contain path separators or '..'."
+			return false
+		end
 		window.ConfigName = configName
 		window.ConfigFolder = configFolder
+		window:SavePersistentSettings()
+		refreshPickerLabels()
 		return true
 	end
 	local function makeConfigButton(text, xScale, widthScale, callback)
 		local button = make("TextButton", {
 			Size = UDim2.new(widthScale, -4, 0, 28),
-			Position = UDim2.new(xScale, xScale > 0 and 4 or 0, 0, 148),
+			Position = UDim2.new(xScale, xScale > 0 and 4 or 0, 0, 178),
 			BackgroundColor3 = THEME.Element,
 			BackgroundTransparency = 0.2,
 			Text = text,
@@ -2427,6 +2727,7 @@ buildSettingsView = function(window)
 		if not syncConfigInputs() then return end
 		local ok, result = window:SaveConfig()
 		status.Text = ok and ("Saved: " .. result) or ("Save failed: " .. tostring(result))
+		refreshConfigList()
 	end)
 	makeConfigButton("Load", 0.34, 0.32, function()
 		if not syncConfigInputs() then return end
@@ -2438,9 +2739,11 @@ buildSettingsView = function(window)
 		if not syncConfigInputs() then return end
 		local ok, result = window:DeleteConfig()
 		status.Text = ok and ("Deleted: " .. window:GetConfigPath()) or ("Delete failed: " .. tostring(result))
+		refreshConfigList()
 	end)
 
 	window.SettingsView = settingsView
+	window.CloseSettingsPicker = closePicker
 	refresh()
 end
 
