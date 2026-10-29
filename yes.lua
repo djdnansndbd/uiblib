@@ -1298,14 +1298,19 @@ function Window:LoadConfig()
 			local entry = self._configElements[key]
 			if entry then
 				local value = deserialize(raw)
-				pcall(function()
-					entry.Set(value)
-					task.wait()
-					entry.Set(value)
-					task.defer(function()
-						entry.Set(value)
-					end)
-				end)
+				pcall(function() entry.Set(value) end)
+				task.defer(function() pcall(function() entry.Set(value) end) end)
+			end
+		end
+	end
+	-- Force second pass
+	task.wait()
+	for key, raw in pairs(data) do
+		if string.sub(key, 1, 10) ~= "__Stardust" then
+			local entry = self._configElements[key]
+			if entry then
+				local value = deserialize(raw)
+				pcall(function() entry.Set(value) end)
 			end
 		end
 	end
@@ -3332,7 +3337,12 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
-		Set = function(_, v) apply(v, false) end,
+		Set = function(_, v) 
+			apply(v == true, true, false)
+			task.defer(function() apply(v == true, true, false) end)
+			task.wait()
+			pcall(function() apply(v == true, true, false) end)
+		end,
 		Get = function() return state end,
 		Destroy = function() holder:Destroy() end,
 	}
