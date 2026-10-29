@@ -1003,6 +1003,7 @@ function StardustUI.new(opts)
 	self.Updaters = {}
 	self._resetters = {}
 	self._configElements = {}
+	self._autoConfigElementIndex = 0
 
 	-- Config
 	local savedSettings = loadPersistentSettings()
@@ -1184,7 +1185,10 @@ function Window:LoadConfig()
 			local entry = self._configElements[key]
 			if entry then
 				local value = deserialize(raw)
-				pcall(entry.Set, value)
+				local applied, err = pcall(entry.Set, value)
+				if not applied then
+					warn("[StardustUI] Could not load config entry " .. tostring(key) .. ":", err)
+				end
 			end
 		end
 	end
@@ -1230,9 +1234,11 @@ function Window:DismissAll()
 end
 
 function Window:_register(key, getFn, setFn)
-	if key and key ~= "" then
-		self._configElements[key] = { Get = getFn, Set = setFn }
+	if not key or key == "" then
+		self._autoConfigElementIndex += 1
+		key = string.format("element:%d", self._autoConfigElementIndex)
 	end
+	self._configElements[key] = { Get = getFn, Set = setFn }
 end
 
 function Window:_build()
@@ -2845,7 +2851,7 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 
-	local function apply(v, fire)
+	local function apply(v, fire, save)
 		state = v
 		tween(btn, { BackgroundColor3 = state and WHITE or THEME.Section, BackgroundTransparency = state and 0 or 0.3 })
 		tween(knob, {
@@ -2856,7 +2862,7 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 			local ok, err = pcall(callback, state)
 			if not ok then warn("[StardustUI]", err) end
 		end
-		if fire and self.Tab.Window.AutoSave then
+		if fire and save ~= false and self.Tab.Window.AutoSave then
 			self.Tab.Window:SaveConfig()
 		end
 	end
@@ -2867,7 +2873,7 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 		if state then apply(false, true) end
 	end)
 
-	self.Tab.Window:_register(configKey, function() return state end, function(v) apply(v == true, false) end)
+	self.Tab.Window:_register(configKey, function() return state end, function(v) apply(v == true, true, false) end)
 
 	return {
 		Set = function(_, v) apply(v, false) end,
@@ -2966,6 +2972,10 @@ function Section:Slider(text, min, max, default, callback, configKey)
 		fill.Size = UDim2.new(pct, 0, 1, 0)
 		knob.Position = UDim2.new(pct, 0, 0.5, 0)
 		valLabel.Text = tostring(value)
+		if callback then
+			local ok, err = pcall(callback, value)
+			if not ok then warn("[StardustUI]", err) end
+		end
 	end)
 
 	return {
@@ -3024,7 +3034,13 @@ function Section:Textbox(text, default, callback, configKey)
 		end
 	end)
 
-	self.Tab.Window:_register(configKey, function() return box.Text end, function(v) box.Text = tostring(v or "") end)
+	self.Tab.Window:_register(configKey, function() return box.Text end, function(v)
+		box.Text = tostring(v or "")
+		if callback then
+			local ok, err = pcall(callback, box.Text, false)
+			if not ok then warn("[StardustUI]", err) end
+		end
+	end)
 
 	return {
 		Set = function(_, t) box.Text = t end,
@@ -3295,6 +3311,10 @@ function Section:MultiDropdown(text, infoOrOptions, optionsOrDefault, defaultOrC
 	self.Tab.Window:_register(configKey, getValues, function(values)
 		applyValues(type(values) == "table" and values or {})
 		updateRows()
+		if callback then
+			local ok, err = pcall(callback, getValues())
+			if not ok then warn("[StardustUI]", err) end
+		end
 	end)
 
 	return {
@@ -3660,6 +3680,10 @@ function Section:Dropdown(text, infoOrOptions, optionsOrDefault, defaultOrCallba
 	self.Tab.Window:_register(configKey, function() return value end, function(v)
 		value = v
 		current.Text = tostring(v)
+		if callback then
+			local ok, err = pcall(callback, value)
+			if not ok then warn("[StardustUI]", err) end
+		end
 	end)
 
 	return {
@@ -3742,6 +3766,10 @@ function Section:Keybind(text, default, callback, configKey)
 		if typeof(v) == "EnumItem" then
 			current = v
 			btn.Text = current.Name
+			if callback then
+				local ok, err = pcall(callback, current)
+				if not ok then warn("[StardustUI]", err) end
+			end
 		end
 	end)
 
