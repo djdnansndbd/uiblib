@@ -1103,6 +1103,7 @@ function StardustUI.new(opts)
 	self.Updaters = {}
 	self._resetters = {}
 	self._configElements = {}
+	self._searchItems = {}
 	self._autoConfigElementIndex = 0
 
 	-- Config
@@ -1317,6 +1318,9 @@ function Window:SetTheme(themeName)
 	if not applyTheme(self, themeName) then
 		return false
 	end
+	if self.RefreshThemeButtons then
+		self.RefreshThemeButtons()
+	end
 	self:SavePersistentSettings()
 	return true
 end
@@ -1351,6 +1355,21 @@ function Window:_register(key, getFn, setFn)
 		key = string.format("element:%d", self._autoConfigElementIndex)
 	end
 	self._configElements[key] = { Get = getFn, Set = setFn }
+end
+
+function Window:_registerSearchItem(name, tab, target, sectionName)
+	if type(name) ~= "string" or not target then
+		return
+	end
+	table.insert(self._searchItems, {
+		Name = name,
+		Tab = tab,
+		Target = target,
+		SearchText = string.lower(name .. " " .. tab.Name .. " " .. (sectionName or "")),
+	})
+	if self.RefreshControlSearch then
+		self.RefreshControlSearch()
+	end
 end
 
 function Window:_build()
@@ -1489,7 +1508,7 @@ function Window:_build()
 		Position = UDim2.new(1, -100, 0, 9),
 		BackgroundColor3 = THEME.Element,
 		BackgroundTransparency = 0.4,
-		Text = "⚙",
+		Text = "",
 		TextColor3 = WHITE,
 		Font = THEME.FontBold,
 		TextSize = 17,
@@ -1499,6 +1518,38 @@ function Window:_build()
 	}, top)
 	corner(settingsBtn, UDim.new(0, 6))
 	self.SettingsButton = settingsBtn
+	for index = 0, 7 do
+		local angle = math.rad(index * 45)
+		local spoke = make("Frame", {
+			Size = UDim2.fromOffset(4, 6),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(14 + math.cos(angle) * 6, 14 + math.sin(angle) * 6),
+			Rotation = index * 45,
+			BackgroundColor3 = WHITE,
+			BorderSizePixel = 0,
+			ZIndex = 16,
+		}, settingsBtn)
+		corner(spoke, UDim.new(0, 1))
+	end
+	local gearRing = make("Frame", {
+		Size = UDim2.fromOffset(12, 12),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 17,
+	}, settingsBtn)
+	corner(gearRing, UDim.new(1, 0))
+	stroke(gearRing, WHITE, 2, 0)
+	local gearHub = make("Frame", {
+		Size = UDim2.fromOffset(4, 4),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 18,
+	}, settingsBtn)
+	corner(gearHub, UDim.new(1, 0))
 	animatedStroke(settingsBtn, 1.2, 0.35)
 	applyHoverEffect(settingsBtn, nil, function() return THEME.Element end, function() return THEME.Element end, 0.4, 0.2)
 	settingsBtn.Activated:Connect(function() self:ShowSettings() end)
@@ -2499,7 +2550,100 @@ buildSettingsView = function(window)
 		return card
 	end
 
-	local themeCard = createCard("Appearance", 136)
+	local searchCard = createCard("Find a control", 158)
+	local controlSearchBox = make("TextBox", {
+		Size = UDim2.new(1, 0, 0, 28),
+		Position = UDim2.fromOffset(0, 24),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.2,
+		Text = "",
+		PlaceholderText = "Search controls across tabs...",
+		TextColor3 = THEME.Text,
+		PlaceholderColor3 = THEME.TextMute,
+		Font = THEME.Font,
+		TextSize = 11,
+		ClearTextOnFocus = false,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, searchCard)
+	corner(controlSearchBox, UDim.new(0, 5))
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+	}, controlSearchBox)
+	local controlSearchResults = make("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 0, 82),
+		Position = UDim2.fromOffset(0, 58),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 2,
+		ScrollBarImageColor3 = THEME.TextMute,
+		ZIndex = 16,
+	}, searchCard)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 3),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, controlSearchResults)
+	local function renderControlSearch()
+		controlSearchResults.CanvasPosition = Vector2.new(0, 0)
+		for _, child in ipairs(controlSearchResults:GetChildren()) do
+			if child:IsA("GuiObject") then child:Destroy() end
+		end
+		local query = string.lower(string.match(controlSearchBox.Text, "^%s*(.-)%s*$") or "")
+		if query == "" then return end
+		local matches = 0
+		for _, item in ipairs(window._searchItems) do
+			if item.Target.Parent and string.find(item.SearchText, query, 1, true) then
+				matches += 1
+				local resultButton = make("TextButton", {
+					Size = UDim2.new(1, 0, 0, 22),
+					BackgroundColor3 = THEME.Element,
+					BackgroundTransparency = 0.25,
+					Text = item.Name .. "  ·  " .. item.Tab.Name,
+					TextColor3 = THEME.Text,
+					Font = THEME.Font,
+					TextSize = 10,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					BorderSizePixel = 0,
+					AutoButtonColor = false,
+					LayoutOrder = matches,
+					ZIndex = 17,
+				}, controlSearchResults)
+				corner(resultButton, UDim.new(0, 4))
+				make("UIPadding", {
+					PaddingLeft = UDim.new(0, 8),
+					PaddingRight = UDim.new(0, 8),
+				}, resultButton)
+				resultButton.Activated:Connect(function()
+					local tab = item.Tab
+					local target = item.Target
+					window:SelectTab(tab)
+					task.defer(function()
+						if not target.Parent or not tab.Scroll.Parent then return end
+						local targetY = target.AbsolutePosition.Y - tab.Scroll.AbsolutePosition.Y
+							+ tab.Scroll.CanvasPosition.Y - 12
+						tab.Scroll.CanvasPosition = Vector2.new(0, math.max(0, targetY))
+					end)
+				end)
+			end
+		end
+		if matches == 0 then
+			label({
+				Size = UDim2.new(1, 0, 0, 22),
+				Text = "No matching controls",
+				TextColor3 = THEME.TextMute,
+				TextSize = 10,
+				ZIndex = 17,
+			}, controlSearchResults)
+		end
+	end
+	table.insert(window.Connections, controlSearchBox:GetPropertyChangedSignal("Text"):Connect(renderControlSearch))
+	window.RefreshControlSearch = renderControlSearch
+
+	local themeCard = createCard("Appearance", 154)
 	label({
 		Size = UDim2.new(1, 0, 0, 14),
 		Position = UDim2.fromOffset(0, 22),
@@ -2509,17 +2653,18 @@ buildSettingsView = function(window)
 		ZIndex = 16,
 	}, themeCard)
 	local themeButtons = {}
+	local themeSwatches = {}
 	local themeNames = { "Stardust", "Midnight", "Ocean", "Crimson", "Emerald", "Violet", "Rose", "AMOLED" }
 	for index, name in ipairs(themeNames) do
 		local column = (index - 1) % 4
 		local row = math.floor((index - 1) / 4)
+		local preset = THEME_PRESETS[name]
 		local button = make("TextButton", {
-			Size = UDim2.new(0.25, -5, 0, 28),
-			Position = UDim2.new(column * 0.25, column * 2, 0, 49 + row * 32),
-			BackgroundColor3 = THEME.Element,
-			BackgroundTransparency = 0.2,
-			Text = name,
-			TextColor3 = WHITE,
+			Size = UDim2.new(0.25, -5, 0, 40),
+			Position = UDim2.new(column * 0.25, column * 2, 0, 63 + row * 44),
+			BackgroundColor3 = preset.Panel,
+			BackgroundTransparency = 0.05,
+			Text = "",
 			Font = THEME.FontBold,
 			TextSize = 10,
 			BorderSizePixel = 0,
@@ -2527,12 +2672,33 @@ buildSettingsView = function(window)
 			ZIndex = 16,
 		}, themeCard)
 		corner(button, UDim.new(0, 5))
+		stroke(button, preset.Element, 1, 0.15)
+		local themeLabel = label({
+			Size = UDim2.new(1, -6, 0, 18),
+			Position = UDim2.fromOffset(3, 2),
+			Text = name,
+			TextColor3 = preset.Text,
+			Font = THEME.FontBold,
+			TextSize = 9,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			ZIndex = 17,
+		}, button)
+		themeSwatches[name] = {}
+		for swatchIndex, color in ipairs({ preset.Bg, preset.Section, preset.Element }) do
+			local swatch = make("Frame", {
+				Size = UDim2.fromOffset(12, 6),
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, (swatchIndex - 2) * 16, 0, 27),
+				BackgroundColor3 = color,
+				BorderSizePixel = 0,
+				ZIndex = 17,
+			}, button)
+			corner(swatch, UDim.new(0, 2))
+			themeSwatches[name][swatchIndex] = swatch
+		end
 		themeButtons[name] = button
 		button.Activated:Connect(function()
 			window:SetTheme(name)
-			for themeName, themeButton in pairs(themeButtons) do
-				themeButton.Text = themeName == name and (themeName .. " ✓") or themeName
-			end
 			local ok, result = window:SaveConfig()
 			if ok then
 				window:Notify("Theme changed", name .. " theme applied and saved.", 4, "success")
@@ -2541,6 +2707,66 @@ buildSettingsView = function(window)
 			end
 		end)
 	end
+	local themeSearchBox = make("TextBox", {
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.fromOffset(0, 36),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.25,
+		Text = "",
+		PlaceholderText = "Filter themes...",
+		TextColor3 = THEME.Text,
+		PlaceholderColor3 = THEME.TextMute,
+		Font = THEME.Font,
+		TextSize = 10,
+		ClearTextOnFocus = false,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, themeCard)
+	corner(themeSearchBox, UDim.new(0, 4))
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0, 7),
+		PaddingRight = UDim.new(0, 7),
+	}, themeSearchBox)
+	local noThemesLabel = label({
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.fromOffset(0, 86),
+		Text = "No matching themes",
+		TextColor3 = THEME.TextMute,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Visible = false,
+		ZIndex = 16,
+	}, themeCard)
+	local function refreshThemeButtons()
+		local query = string.lower(string.match(themeSearchBox.Text, "^%s*(.-)%s*$") or "")
+		local visibleIndex = 0
+		for _, themeName in ipairs(themeNames) do
+			local themeButton = themeButtons[themeName]
+			local preset = THEME_PRESETS[themeName]
+			local visible = query == "" or string.find(string.lower(themeName), query, 1, true) ~= nil
+			themeButton.Visible = visible
+			themeButton.BackgroundColor3 = preset.Panel
+			local outline = themeButton:FindFirstChildOfClass("UIStroke")
+			if outline then outline.Color = preset.Element end
+			for swatchIndex, color in ipairs({ preset.Bg, preset.Section, preset.Element }) do
+				themeSwatches[themeName][swatchIndex].BackgroundColor3 = color
+			end
+			if visible then
+				local column = visibleIndex % 4
+				local row = math.floor(visibleIndex / 4)
+				themeButton.Position = UDim2.new(column * 0.25, column * 2, 0, 63 + row * 44)
+				local themeLabel = themeButton:FindFirstChildWhichIsA("TextLabel")
+				if themeLabel then
+					themeLabel.Text = themeName == window.ThemeName and (themeName .. "  ✓") or themeName
+				end
+				visibleIndex += 1
+			end
+		end
+		noThemesLabel.Visible = visibleIndex == 0
+	end
+	table.insert(window.Connections, themeSearchBox:GetPropertyChangedSignal("Text"):Connect(refreshThemeButtons))
+	window.RefreshThemeButtons = refreshThemeButtons
+	refreshThemeButtons()
 
 	local effectsCard = createCard("Background effects", 116)
 	local function createEffectsSlider(title, y, minValue, maxValue, initialValue, formatValue, onChanged)
@@ -3012,6 +3238,7 @@ function Section:Button(text, infoOrCallback, callback)
 			if not ok then warn("[StardustUI]", err) end
 		end
 	end)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, btn, self.Name)
 	return {
 		Button = btn,
 		SetText = function(_, t) txt.Text = t end,
@@ -3092,6 +3319,7 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 	end)
 
 	self.Tab.Window:_register(configKey, function() return state end, function(v) apply(v == true, true, false) end)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
 		Set = function(_, v) apply(v, false) end,
@@ -3195,6 +3423,7 @@ function Section:Slider(text, min, max, default, callback, configKey)
 			if not ok then warn("[StardustUI]", err) end
 		end
 	end)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
 		Set = function(_, v)
@@ -3259,6 +3488,7 @@ function Section:Textbox(text, default, callback, configKey)
 			if not ok then warn("[StardustUI]", err) end
 		end
 	end)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
 		Set = function(_, t) box.Text = t end,
@@ -3534,6 +3764,7 @@ function Section:MultiDropdown(text, infoOrOptions, optionsOrDefault, defaultOrC
 			if not ok then warn("[StardustUI]", err) end
 		end
 	end)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, container, self.Name)
 
 	return {
 		Get = getValues,
@@ -3903,6 +4134,7 @@ function Section:Dropdown(text, infoOrOptions, optionsOrDefault, defaultOrCallba
 			if not ok then warn("[StardustUI]", err) end
 		end
 	end)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, container, self.Name)
 
 	return {
 		Set = function(_, v)
@@ -3990,6 +4222,7 @@ function Section:Keybind(text, default, callback, configKey)
 			end
 		end
 	end)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
 		Get = function() return current end,
@@ -4004,6 +4237,7 @@ function Section:Label(text)
 		Text = text, TextSize = 12, TextColor3 = THEME.TextDim,
 		LayoutOrder = self:_nextOrder(), TextWrapped = true, ZIndex = 15,
 	}, self.Frame)
+	self.Tab.Window:_registerSearchItem(text, self.Tab, l, self.Name)
 	return { Set = function(_, t) l.Text = t end, Destroy = function() l:Destroy() end }
 end
 
