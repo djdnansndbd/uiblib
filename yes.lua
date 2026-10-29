@@ -1219,11 +1219,11 @@ function StardustUI.new(opts)
 
 	-- Auto-load after elements have a chance to register
 	if self.AutoLoad then
-		task.defer(function()
-			task.wait(0.2)
-			local loaded, err = self:LoadConfig()
-			if not loaded then
-				warn("[StardustUI] Could not auto-load config:", self:GetConfigPath(), err)
+		task.spawn(function()
+			for i=1, 6 do
+				task.wait(0.4 * i)
+				if self.Destroyed then break end
+				pcall(function() self:LoadConfig() end)
 			end
 		end)
 	end
