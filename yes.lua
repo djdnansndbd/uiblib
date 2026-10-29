@@ -223,6 +223,11 @@ local function applyTheme(window, themeName)
 			instance.Color = recolor(instance.Color)
 		end
 	end
+	for _, button in ipairs({ window.CloseButton, window.HomeButton, window.SettingsButton }) do
+		if button then
+			button.BackgroundColor3 = preset.Element
+		end
+	end
 	for key, value in pairs(preset) do
 		THEME[key] = value
 	end
@@ -1385,6 +1390,7 @@ function Window:_build()
 		ZIndex = 15,
 	}, top)
 	corner(closeBtn, UDim.new(0, 6))
+	self.CloseButton = closeBtn
 	animatedStroke(closeBtn, 1.4, 0.2)
 	applyHoverEffect(closeBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
 	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { TextColor3 = BLACK }) end)
@@ -1406,6 +1412,7 @@ function Window:_build()
 		ZIndex = 15,
 	}, top)
 	corner(homeBtn, UDim.new(0, 6))
+	self.HomeButton = homeBtn
 	animatedStroke(homeBtn, 1.2, 0.35)
 	applyHoverEffect(homeBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
 	homeBtn.Activated:Connect(function() self:ShowHome() end)
@@ -1425,6 +1432,7 @@ function Window:_build()
 		ZIndex = 15,
 	}, top)
 	corner(settingsBtn, UDim.new(0, 6))
+	self.SettingsButton = settingsBtn
 	animatedStroke(settingsBtn, 1.2, 0.35)
 	applyHoverEffect(settingsBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
 	settingsBtn.Activated:Connect(function() self:ShowSettings() end)
