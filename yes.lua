@@ -1298,10 +1298,14 @@ function Window:LoadConfig()
 			local entry = self._configElements[key]
 			if entry then
 				local value = deserialize(raw)
-				local applied, err = pcall(entry.Set, value)
-				if not applied then
-					warn("[StardustUI] Could not load config entry " .. tostring(key) .. ":", err)
-				end
+				pcall(function()
+					entry.Set(value)
+					task.wait()
+					entry.Set(value)
+					task.defer(function()
+						entry.Set(value)
+					end)
+				end)
 			end
 		end
 	end
@@ -3319,7 +3323,12 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 		if state then apply(false, true) end
 	end)
 
-	self.Tab.Window:_register(configKey, function() return state end, function(v) apply(v == true, false, false) end)
+	self.Tab.Window:_register(configKey, function() return state end, function(v) 
+		apply(v == true, true, false)
+		task.defer(function() apply(v == true, true, false) end)
+		task.wait()
+		apply(v == true, true, false)
+	end)
 	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
