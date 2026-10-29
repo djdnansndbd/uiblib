@@ -39,6 +39,45 @@ local THEME = {
 	TrElement = 0.90,
 }
 
+local THEME_PRESETS = {
+	["Stardust"] = {
+		Bg = Color3.fromRGB(45, 45, 52),
+		Panel = Color3.fromRGB(52, 52, 60),
+		Section = Color3.fromRGB(62, 62, 72),
+		Element = Color3.fromRGB(74, 74, 86),
+		Text = Color3.fromRGB(255, 255, 255),
+		TextDim = Color3.fromRGB(200, 200, 210),
+		TextMute = Color3.fromRGB(130, 130, 145),
+	},
+	["Midnight"] = {
+		Bg = Color3.fromRGB(18, 22, 35),
+		Panel = Color3.fromRGB(25, 31, 48),
+		Section = Color3.fromRGB(35, 44, 66),
+		Element = Color3.fromRGB(47, 59, 85),
+		Text = Color3.fromRGB(255, 255, 255),
+		TextDim = Color3.fromRGB(190, 204, 230),
+		TextMute = Color3.fromRGB(120, 139, 173),
+	},
+	["Ocean"] = {
+		Bg = Color3.fromRGB(20, 38, 48),
+		Panel = Color3.fromRGB(25, 52, 65),
+		Section = Color3.fromRGB(34, 69, 84),
+		Element = Color3.fromRGB(45, 88, 104),
+		Text = Color3.fromRGB(255, 255, 255),
+		TextDim = Color3.fromRGB(190, 222, 230),
+		TextMute = Color3.fromRGB(120, 166, 178),
+	},
+	["Light"] = {
+		Bg = Color3.fromRGB(214, 219, 228),
+		Panel = Color3.fromRGB(190, 198, 211),
+		Section = Color3.fromRGB(168, 179, 196),
+		Element = Color3.fromRGB(145, 159, 180),
+		Text = Color3.fromRGB(38, 45, 58),
+		TextDim = Color3.fromRGB(48, 57, 72),
+		TextMute = Color3.fromRGB(76, 88, 108),
+	},
+}
+
 local WHITE = Color3.fromRGB(255, 255, 255)
 local BLACK = Color3.fromRGB(0, 0, 0)
 local FADE_ENDS = NumberSequence.new({
@@ -102,6 +141,55 @@ local function label(props, parent)
 	return make("TextLabel", base, parent)
 end
 
+local function applyTheme(window, themeName)
+	local preset = THEME_PRESETS[themeName]
+	if not preset then
+		return false
+	end
+
+	local oldColors = {}
+	for _, key in ipairs({ "Bg", "Panel", "Section", "Element", "TextDim", "TextMute" }) do
+		oldColors[key] = THEME[key]
+	end
+	local oldText = THEME.Text
+
+	local function recolor(color)
+		for key, oldColor in pairs(oldColors) do
+			if color == oldColor then
+				return preset[key]
+			end
+		end
+		return color
+	end
+
+	for _, instance in ipairs(window.Gui:GetDescendants()) do
+		if instance:IsA("GuiObject") then
+			instance.BackgroundColor3 = recolor(instance.BackgroundColor3)
+		end
+		if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+			if instance.TextColor3 == oldText then
+				instance.TextColor3 = preset.Text
+			else
+				instance.TextColor3 = recolor(instance.TextColor3)
+			end
+		end
+		if instance:IsA("ImageLabel") or instance:IsA("ImageButton") then
+			instance.ImageColor3 = recolor(instance.ImageColor3)
+		end
+		if instance:IsA("ScrollingFrame") then
+			instance.ScrollBarImageColor3 = recolor(instance.ScrollBarImageColor3)
+		end
+		if instance:IsA("UIStroke") then
+			instance.Color = recolor(instance.Color)
+		end
+	end
+	for key, value in pairs(preset) do
+		THEME[key] = value
+	end
+	window.ThemeName = themeName
+	return true
+end
+
 local function addInfoTooltip(window, target, info)
 	if type(info) ~= "string" or info == "" then return end
 
@@ -116,9 +204,14 @@ local function addInfoTooltip(window, target, info)
 	}, window.Gui)
 	corner(tooltip, UDim.new(0, 6))
 	stroke(tooltip, WHITE, 1, 0.65)
+	make("UIPadding", {
+		PaddingTop = UDim.new(0, 6),
+		PaddingBottom = UDim.new(0, 6),
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+	}, tooltip)
 	label({
-		Position = UDim2.fromOffset(8, 6),
-		Size = UDim2.new(1, -16, 0, 0),
+		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Text = info,
 		TextSize = 11,
@@ -134,15 +227,20 @@ local function addInfoTooltip(window, target, info)
 			local camera = workspace.CurrentCamera
 			if not camera then return end
 			local viewport = camera.ViewportSize
+			local mousePosition = UserInputService:GetMouseLocation()
 			local size = tooltip.AbsoluteSize
-			local targetPosition = target.AbsolutePosition
-			local targetSize = target.AbsoluteSize
-			local x = math.clamp(targetPosition.X, 4, math.max(4, viewport.X - size.X - 4))
-			local y = targetPosition.Y + targetSize.Y + 4
-			if y + size.Y > viewport.Y then
-				y = math.max(4, targetPosition.Y - size.Y - 4)
+			local x = mousePosition.X + 14
+			local y = mousePosition.Y + 18
+			if x + size.X > viewport.X - 4 then
+				x = mousePosition.X - size.X - 14
 			end
-			tooltip.Position = UDim2.fromOffset(x, y)
+			if y + size.Y > viewport.Y then
+				y = mousePosition.Y - size.Y - 14
+			end
+			tooltip.Position = UDim2.fromOffset(
+				math.clamp(x, 4, math.max(4, viewport.X - size.X - 4)),
+				math.clamp(y, 4, math.max(4, viewport.Y - size.Y - 4))
+			)
 		end)
 	end)
 	target.MouseLeave:Connect(function()
@@ -819,6 +917,7 @@ end
 local Window = {}
 Window.__index = Window
 local buildHomeView
+local buildSettingsView
 
 function StardustUI.new(opts)
 	opts = opts or {}
@@ -849,6 +948,10 @@ function StardustUI.new(opts)
 	self.ConfigFolder = opts.ConfigFolder or "StardustConfigs"
 	self.AutoLoad     = opts.AutoLoad ~= false   -- default true
 	self.AutoSave     = opts.AutoSave ~= false   -- default true
+	self.ThemeName = THEME_PRESETS[opts.ThemeName] and opts.ThemeName or "Stardust"
+	for key, value in pairs(THEME_PRESETS[self.ThemeName]) do
+		THEME[key] = value
+	end
 
 	local sg = playerGui:FindFirstChild("StardustUI")
 	if not sg then
@@ -864,6 +967,7 @@ function StardustUI.new(opts)
 	self:_build()
 
 	buildHomeView(self)
+	buildSettingsView(self)
 	local homeCard = self.HomeCard
 
 	local sessionStartedAt = os.clock()
@@ -931,6 +1035,9 @@ function Window:SaveConfig()
 			data[key] = serialize(value)
 		end
 	end
+	data.__StardustTheme = self.ThemeName
+	data.__StardustAutoSave = self.AutoSave
+	data.__StardustAutoLoad = self.AutoLoad
 
 	local encoded = HttpService:JSONEncode(data)
 	local path = self:_getConfigPath()
@@ -959,23 +1066,41 @@ function Window:LoadConfig()
 		return false, "invalid config"
 	end
 
+	if type(data.__StardustTheme) == "string" then
+		self:SetTheme(data.__StardustTheme)
+	end
+	if type(data.__StardustAutoSave) == "boolean" then
+		self.AutoSave = data.__StardustAutoSave
+	end
+	if type(data.__StardustAutoLoad) == "boolean" then
+		self.AutoLoad = data.__StardustAutoLoad
+	end
 	for key, raw in pairs(data) do
-		local entry = self._configElements[key]
-		if entry then
-			local value = deserialize(raw)
-			pcall(entry.Set, value)
+		if string.sub(key, 1, 10) ~= "__Stardust" then
+			local entry = self._configElements[key]
+			if entry then
+				local value = deserialize(raw)
+				pcall(entry.Set, value)
+			end
 		end
 	end
 	return true
 end
 
+function Window:SetTheme(themeName)
+	return applyTheme(self, themeName)
+end
+
 function Window:DeleteConfig()
 	local path = self:_getConfigPath()
 	if delfile and isfile and isfile(path) then
-		pcall(delfile, path)
-		return true
+		local ok, err = pcall(delfile, path)
+		if ok then
+			return true
+		end
+		return false, tostring(err)
 	end
-	return false
+	return false, "file not found or deletefile unavailable"
 end
 
 function Window:GetConfigPath()
@@ -1133,6 +1258,25 @@ function Window:_build()
 		ZIndex = 17,
 	}, homeIcon)
 	homeBtn.Activated:Connect(function() self:ShowHome() end)
+
+	local settingsBtn = make("TextButton", {
+		Name = "SettingsButton",
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -100, 0, 9),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.4,
+		Text = "⚙",
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 17,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 15,
+	}, top)
+	corner(settingsBtn, UDim.new(0, 6))
+	animatedStroke(settingsBtn, 1.2, 0.35)
+	applyHoverEffect(settingsBtn, nil, THEME.Element, WHITE, 0.4, 0)
+	settingsBtn.Activated:Connect(function() self:ShowSettings() end)
 
 	-- TAB SIDEBAR
 	local tabListBg = make("Frame", {
@@ -1656,6 +1800,9 @@ function Window:SelectTab(tab)
 	if self.HomeView then
 		self.HomeView.Visible = false
 	end
+	if self.SettingsView then
+		self.SettingsView.Visible = false
+	end
 	if self.CurrentTab then
 		self.CurrentTab.Holder.Visible = false
 		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
@@ -1678,8 +1825,30 @@ function Window:ShowHome()
 		tween(self.CurrentTab.ButtonStroke, { Transparency = 0.85 })
 		self.CurrentTab = nil
 	end
+	if self.SettingsView then
+		self.SettingsView.Visible = false
+	end
 	self.HomeViewVisible = true
 	self.HomeView.Visible = true
+end
+
+function Window:ShowSettings()
+	if self.Destroyed or not self.SettingsView then return end
+	if self.CurrentTab then
+		self.CurrentTab.Holder.Visible = false
+		tween(self.CurrentTab.Button, { BackgroundColor3 = THEME.Element, BackgroundTransparency = 0.7 })
+		tween(self.CurrentTab.ButtonText, { TextColor3 = THEME.TextDim })
+		tween(self.CurrentTab.ButtonStroke, { Transparency = 0.85 })
+		self.CurrentTab = nil
+	end
+	if self.HomeView then
+		self.HomeView.Visible = false
+	end
+	self.HomeViewVisible = false
+	self.SettingsView.Visible = true
+	if self.RefreshSettings then
+		self:RefreshSettings()
+	end
 end
 
 ---------------------------------------------------------------------
@@ -2034,6 +2203,245 @@ buildHomeView = function(window)
 			gameCard:SetField("Creator", "Unavailable")
 		end
 	end)
+end
+
+buildSettingsView = function(window)
+	local settingsView = make("Frame", {
+		Name = "SettingsView",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 14,
+	}, window.Content)
+	local scroll = make("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 2,
+		ScrollBarImageColor3 = WHITE,
+		ScrollBarImageTransparency = 0.5,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 14,
+	}, settingsView)
+	make("UIPadding", {
+		PaddingTop = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 16),
+	}, scroll)
+	make("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, scroll)
+
+	local function createCard(title, height)
+		local card = make("Frame", {
+			Size = UDim2.new(1, 0, 0, height),
+			BackgroundColor3 = THEME.Section,
+			BackgroundTransparency = THEME.TrSection,
+			BorderSizePixel = 0,
+			ZIndex = 15,
+		}, scroll)
+		corner(card, UDim.new(0, 8))
+		animatedStroke(card, 1.5, 0.4)
+		make("UIPadding", {
+			PaddingTop = UDim.new(0, 10),
+			PaddingBottom = UDim.new(0, 10),
+			PaddingLeft = UDim.new(0, 10),
+			PaddingRight = UDim.new(0, 10),
+		}, card)
+		label({
+			Size = UDim2.new(1, 0, 0, 18),
+			Text = title:upper(),
+			Font = THEME.FontBold,
+			TextSize = 11,
+			TextColor3 = THEME.TextDim,
+			ZIndex = 16,
+		}, card)
+		return card
+	end
+
+	local themeCard = createCard("Appearance", 104)
+	label({
+		Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.fromOffset(0, 22),
+		Text = "Choose a color theme",
+		TextSize = 11,
+		TextColor3 = THEME.TextDim,
+		ZIndex = 16,
+	}, themeCard)
+	local themeButtons = {}
+	local themeNames = { "Stardust", "Midnight", "Ocean", "Light" }
+	for index, name in ipairs(themeNames) do
+		local button = make("TextButton", {
+			Size = UDim2.new(0.25, -5, 0, 28),
+			Position = UDim2.new((index - 1) * 0.25, (index - 1) * 2, 0, 49),
+			BackgroundColor3 = THEME.Element,
+			BackgroundTransparency = 0.2,
+			Text = name,
+			TextColor3 = WHITE,
+			Font = THEME.FontBold,
+			TextSize = 10,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			ZIndex = 16,
+		}, themeCard)
+		corner(button, UDim.new(0, 5))
+		themeButtons[name] = button
+		button.Activated:Connect(function()
+			window:SetTheme(name)
+			for themeName, themeButton in pairs(themeButtons) do
+				themeButton.Text = themeName == name and (themeName .. " ✓") or themeName
+			end
+			local ok, result = window:SaveConfig()
+			if ok then
+				window:Notify("Theme changed", name .. " theme applied and saved.", 4, "success")
+			else
+				window:Notify("Theme changed", name .. " applied; config could not be saved: " .. tostring(result), 5, "warning")
+			end
+		end)
+	end
+
+	local configCard = createCard("Configuration", 226)
+	local function makeInput(caption, y, initialValue)
+		label({
+			Size = UDim2.new(0.3, 0, 0, 26),
+			Position = UDim2.fromOffset(0, y),
+			Text = caption,
+			TextSize = 11,
+			TextColor3 = THEME.TextDim,
+			ZIndex = 16,
+		}, configCard)
+		local input = make("TextBox", {
+			Size = UDim2.new(0.7, 0, 0, 26),
+			Position = UDim2.new(0.3, 0, 0, y),
+			BackgroundColor3 = THEME.Element,
+			BackgroundTransparency = 0.2,
+			Text = initialValue,
+			PlaceholderText = caption,
+			TextColor3 = WHITE,
+			PlaceholderColor3 = THEME.TextMute,
+			Font = THEME.Font,
+			TextSize = 11,
+			BorderSizePixel = 0,
+			ClearTextOnFocus = false,
+			ZIndex = 16,
+		}, configCard)
+		corner(input, UDim.new(0, 5))
+		make("UIPadding", {
+			PaddingLeft = UDim.new(0, 8),
+			PaddingRight = UDim.new(0, 8),
+		}, input)
+		return input
+	end
+	local nameInput = makeInput("Config name", 24, window.ConfigName)
+	local folderInput = makeInput("Config folder", 58, window.ConfigFolder)
+	local status = label({
+		Size = UDim2.new(1, 0, 0, 16),
+		Position = UDim2.fromOffset(0, 90),
+		Text = "",
+		TextSize = 10,
+		TextColor3 = THEME.TextDim,
+		ZIndex = 16,
+	}, configCard)
+
+	local autoSaveButton = make("TextButton", {
+		Size = UDim2.new(0.49, 0, 0, 28),
+		Position = UDim2.fromOffset(0, 112),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.2,
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 10,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 16,
+	}, configCard)
+	corner(autoSaveButton, UDim.new(0, 5))
+	local autoLoadButton = make("TextButton", {
+		Size = UDim2.new(0.49, 0, 0, 28),
+		Position = UDim2.new(0.51, 0, 0, 112),
+		BackgroundColor3 = THEME.Element,
+		BackgroundTransparency = 0.2,
+		TextColor3 = WHITE,
+		Font = THEME.FontBold,
+		TextSize = 10,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		ZIndex = 16,
+	}, configCard)
+	corner(autoLoadButton, UDim.new(0, 5))
+
+	local function refresh()
+		autoSaveButton.Text = "Auto Save: " .. (window.AutoSave and "ON" or "OFF")
+		autoLoadButton.Text = "Auto Load: " .. (window.AutoLoad and "ON" or "OFF")
+		for name, button in pairs(themeButtons) do
+			button.Text = name == window.ThemeName and (name .. " ✓") or name
+		end
+	end
+	window.RefreshSettings = refresh
+	autoSaveButton.Activated:Connect(function()
+		window.AutoSave = not window.AutoSave
+		refresh()
+		local ok, result = window:SaveConfig()
+		status.Text = ok and "Auto Save setting saved." or ("Setting changed; save failed: " .. tostring(result))
+	end)
+	autoLoadButton.Activated:Connect(function()
+		window.AutoLoad = not window.AutoLoad
+		refresh()
+		local ok, result = window:SaveConfig()
+		status.Text = ok and "Auto Load setting saved." or ("Setting changed; save failed: " .. tostring(result))
+	end)
+
+	local function syncConfigInputs()
+		local configName = string.gsub(nameInput.Text, "^%s*(.-)%s*$", "%1")
+		local configFolder = string.gsub(folderInput.Text, "^%s*(.-)%s*$", "%1")
+		if configName == "" or configFolder == "" then
+			status.Text = "Config name and folder cannot be empty."
+			return false
+		end
+		window.ConfigName = configName
+		window.ConfigFolder = configFolder
+		return true
+	end
+	local function makeConfigButton(text, xScale, widthScale, callback)
+		local button = make("TextButton", {
+			Size = UDim2.new(widthScale, -4, 0, 28),
+			Position = UDim2.new(xScale, xScale > 0 and 4 or 0, 0, 148),
+			BackgroundColor3 = THEME.Element,
+			BackgroundTransparency = 0.2,
+			Text = text,
+			TextColor3 = WHITE,
+			Font = THEME.FontBold,
+			TextSize = 10,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			ZIndex = 16,
+		}, configCard)
+		corner(button, UDim.new(0, 5))
+		button.Activated:Connect(callback)
+	end
+	makeConfigButton("Save", 0, 0.32, function()
+		if not syncConfigInputs() then return end
+		local ok, result = window:SaveConfig()
+		status.Text = ok and ("Saved: " .. result) or ("Save failed: " .. tostring(result))
+	end)
+	makeConfigButton("Load", 0.34, 0.32, function()
+		if not syncConfigInputs() then return end
+		local ok, result = window:LoadConfig()
+		status.Text = ok and ("Loaded: " .. window:GetConfigPath()) or ("Load failed: " .. tostring(result))
+		refresh()
+	end)
+	makeConfigButton("Delete", 0.68, 0.32, function()
+		if not syncConfigInputs() then return end
+		local ok, result = window:DeleteConfig()
+		status.Text = ok and ("Deleted: " .. window:GetConfigPath()) or ("Delete failed: " .. tostring(result))
+	end)
+
+	window.SettingsView = settingsView
+	refresh()
 end
 
 ---------------------------------------------------------------------
