@@ -517,9 +517,41 @@ local function createNightSky(parent)
 			}
 		end
 	end
-	addStars(60, 1, 0.006, 0.35, 2)
-	addStars(28, 2, 0.013, 0.15, 3)
-	addStars(12, 3, 0.022, 0.05, 4)
+	local starTiers = {
+		{ size = 1, speed = 0.006, transparency = 0.35, z = 2, ratio = 0.6 },
+		{ size = 2, speed = 0.013, transparency = 0.15, z = 3, ratio = 0.28 },
+		{ size = 3, speed = 0.022, transparency = 0.05, z = 4, ratio = 0.12 },
+	}
+	local function setStarCount(count)
+		count = math.clamp(math.floor(count + 0.5), 20, 200)
+		local desiredByTier = {
+			math.floor(count * starTiers[1].ratio),
+			math.floor(count * starTiers[2].ratio),
+		}
+		desiredByTier[3] = count - desiredByTier[1] - desiredByTier[2]
+		local currentByTier = { 0, 0, 0 }
+		for _, star in ipairs(stars) do
+			currentByTier[star.tier] += 1
+		end
+		for tier = 1, #starTiers do
+			while currentByTier[tier] > desiredByTier[tier] do
+				for index = #stars, 1, -1 do
+					if stars[index].tier == tier then
+						stars[index].f:Destroy()
+						table.remove(stars, index)
+						currentByTier[tier] -= 1
+						break
+					end
+				end
+			end
+			local settings = starTiers[tier]
+			addStars(desiredByTier[tier] - currentByTier[tier], settings.size, settings.speed, settings.transparency, settings.z)
+			for index = #stars - (desiredByTier[tier] - currentByTier[tier]) + 1, #stars do
+				if stars[index] then stars[index].tier = tier end
+			end
+		end
+	end
+	setStarCount(100)
 
 	local sparkles = {}
 	for _ = 1, 6 do
@@ -574,6 +606,20 @@ local function createNightSky(parent)
 
 	local shooters = {}
 	local nextShooter = 0.25
+	local shootingStarsPerMinute = 60
+	local function setShootingStarsPerMinute(rate)
+		shootingStarsPerMinute = math.clamp(math.floor(rate + 0.5), 0, 120)
+		if shootingStarsPerMinute == 0 then
+			nextShooter = math.huge
+			for _, shooter in ipairs(shooters) do
+				shooter.tail:Destroy()
+				shooter.head:Destroy()
+			end
+			table.clear(shooters)
+		else
+			nextShooter = 0
+		end
+	end
 	local function spawnShooter()
 		local W = sky.AbsoluteSize.X
 		local H = sky.AbsoluteSize.Y
@@ -655,9 +701,10 @@ local function createNightSky(parent)
 			sp.c.Rotation = math.deg(math.atan2(sp.vy, sp.vx)) + elapsed * 6
 		end
 
-		if elapsed >= nextShooter and #shooters < 5 then
+		if shootingStarsPerMinute > 0 and elapsed >= nextShooter and #shooters < 5 then
 			spawnShooter()
-			nextShooter = elapsed + rng:NextNumber(0.35, 0.9)
+			local interval = 60 / shootingStarsPerMinute
+			nextShooter = elapsed + rng:NextNumber(interval * 0.8, interval * 1.2)
 		end
 
 		for i = #shooters, 1, -1 do
@@ -680,7 +727,10 @@ local function createNightSky(parent)
 		end
 	end
 
-	return sky, update
+	return sky, update, {
+		SetStarCount = setStarCount,
+		SetShootingStarsPerMinute = setShootingStarsPerMinute,
+	}
 end
 
 ---------------------------------------------------------------------
@@ -1092,6 +1142,16 @@ function StardustUI.new(opts)
 	if not THEME_PRESETS[self.ThemeName] then
 		self.ThemeName = "Stardust"
 	end
+	self.StarCount = math.clamp(
+		math.floor(type(savedSettings.StarCount) == "number" and savedSettings.StarCount or 100),
+		20,
+		200
+	)
+	self.ShootingStarsPerMinute = math.clamp(
+		math.floor(type(savedSettings.ShootingStarsPerMinute) == "number" and savedSettings.ShootingStarsPerMinute or 60),
+		0,
+		120
+	)
 	for key, value in pairs(THEME_PRESETS[self.ThemeName]) do
 		THEME[key] = value
 	end
@@ -1181,6 +1241,8 @@ function Window:SavePersistentSettings()
 		ThemeName = self.ThemeName,
 		AutoSave = self.AutoSave,
 		AutoLoad = self.AutoLoad,
+		StarCount = self.StarCount,
+		ShootingStarsPerMinute = self.ShootingStarsPerMinute,
 	})
 end
 
@@ -1317,8 +1379,11 @@ function Window:_build()
 	}, win)
 	corner(clipFrame)
 
-	local sky, skyUpdate = createNightSky(clipFrame)
+	local sky, skyUpdate, skyEffects = createNightSky(clipFrame)
 	self.Sky = sky
+	self.SkyEffects = skyEffects
+	skyEffects.SetStarCount(self.StarCount)
+	skyEffects.SetShootingStarsPerMinute(self.ShootingStarsPerMinute)
 	table.insert(self.Updaters, skyUpdate)
 
 	local veil = make("Frame", {
@@ -1653,7 +1718,9 @@ function Window:_showQuitConfirm()
 	}, dlg)
 	corner(dlgClip, UDim.new(0, 12))
 
-	local dlgSky, dlgSkyUpdate = createNightSky(dlgClip)
+	local dlgSky, dlgSkyUpdate, dlgSkyEffects = createNightSky(dlgClip)
+	dlgSkyEffects.SetStarCount(self.StarCount)
+	dlgSkyEffects.SetShootingStarsPerMinute(self.ShootingStarsPerMinute)
 	table.insert(self.Updaters, dlgSkyUpdate)
 
 	local dlgVeil = make("Frame", {
@@ -2475,6 +2542,101 @@ buildSettingsView = function(window)
 		end)
 	end
 
+	local effectsCard = createCard("Background effects", 116)
+	local function createEffectsSlider(title, y, minValue, maxValue, initialValue, formatValue, onChanged)
+		label({
+			Size = UDim2.new(1, -70, 0, 16),
+			Position = UDim2.fromOffset(0, y),
+			Text = title,
+			TextSize = 11,
+			TextColor3 = THEME.TextDim,
+			ZIndex = 16,
+		}, effectsCard)
+		local valueLabel = label({
+			Size = UDim2.new(0, 70, 0, 16),
+			Position = UDim2.new(1, -70, 0, y),
+			Text = formatValue(initialValue),
+			TextSize = 11,
+			TextColor3 = THEME.Text,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Font = THEME.FontBold,
+			ZIndex = 16,
+		}, effectsCard)
+		local track = make("TextButton", {
+			Size = UDim2.new(1, 0, 0, 16),
+			Position = UDim2.fromOffset(0, y + 17),
+			BackgroundTransparency = 1,
+			Text = "",
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			ZIndex = 16,
+		}, effectsCard)
+		local trackLine = make("Frame", {
+			Size = UDim2.new(1, 0, 0, 6),
+			Position = UDim2.fromOffset(0, 5),
+			BackgroundColor3 = THEME.Element,
+			BackgroundTransparency = 0.1,
+			BorderSizePixel = 0,
+			ZIndex = 16,
+		}, track)
+		corner(track, UDim.new(1, 0))
+		corner(trackLine, UDim.new(1, 0))
+		local initialPercent = (initialValue - minValue) / (maxValue - minValue)
+		local fill = make("Frame", {
+			Size = UDim2.new(initialPercent, 0, 1, 0),
+			BackgroundColor3 = WHITE,
+			BorderSizePixel = 0,
+			ZIndex = 17,
+		}, trackLine)
+		corner(fill, UDim.new(1, 0))
+		local dragging = false
+		local function setValue(value)
+			value = math.clamp(math.floor(value + 0.5), minValue, maxValue)
+			local percent = (value - minValue) / (maxValue - minValue)
+			fill.Size = UDim2.new(percent, 0, 1, 0)
+			valueLabel.Text = formatValue(value)
+			onChanged(value)
+		end
+		local function setFromX(x)
+			local trackPosition = track.AbsolutePosition
+			local trackSize = track.AbsoluteSize
+			if trackSize.X <= 0 then return end
+			local percent = math.clamp((x - trackPosition.X) / trackSize.X, 0, 1)
+			setValue(minValue + (maxValue - minValue) * percent)
+		end
+		track.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				setFromX(input.Position.X)
+			end
+		end)
+		table.insert(window.Connections, UserInputService.InputChanged:Connect(function(input)
+			if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				setFromX(input.Position.X)
+			end
+		end))
+		table.insert(window.Connections, UserInputService.InputEnded:Connect(function(input)
+			if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+				dragging = false
+				if not window:SavePersistentSettings() then
+					window:Notify("Settings not saved", "Could not save background effect settings.", 4, "warning")
+				end
+			end
+		end))
+	end
+	createEffectsSlider("Stars", 24, 20, 200, window.StarCount, function(value)
+		return tostring(value)
+	end, function(value)
+		window.StarCount = value
+		window.SkyEffects.SetStarCount(value)
+	end)
+	createEffectsSlider("Shooting stars / min", 64, 0, 120, window.ShootingStarsPerMinute, function(value)
+		return value == 0 and "Off" or tostring(value)
+	end, function(value)
+		window.ShootingStarsPerMinute = value
+		window.SkyEffects.SetShootingStarsPerMinute(value)
+	end)
+
 	local configCard = createCard("Configuration", 230)
 	local function makeInput(caption, y, initialValue)
 		label({
@@ -2497,7 +2659,7 @@ buildSettingsView = function(window)
 			Font = THEME.Font,
 			TextSize = 11,
 			BorderSizePixel = 0,
-			ClearTextOnFocus = false,
+			ClearTextOnFocus = true,
 			ZIndex = 16,
 		}, configCard)
 		corner(input, UDim.new(0, 5))
@@ -3072,7 +3234,7 @@ function Section:Textbox(text, default, callback, configKey)
 		Text = default, PlaceholderText = "type...",
 		TextColor3 = WHITE, PlaceholderColor3 = THEME.TextMute,
 		Font = THEME.Font, TextSize = 12,
-		BorderSizePixel = 0, ClearTextOnFocus = false,
+		BorderSizePixel = 0, ClearTextOnFocus = true,
 		ZIndex = 16,
 	}, holder)
 	corner(box, UDim.new(0, 5))
