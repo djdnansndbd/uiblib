@@ -67,14 +67,50 @@ local THEME_PRESETS = {
 		TextDim = Color3.fromRGB(190, 222, 230),
 		TextMute = Color3.fromRGB(120, 166, 178),
 	},
-	["Light"] = {
-		Bg = Color3.fromRGB(214, 219, 228),
-		Panel = Color3.fromRGB(190, 198, 211),
-		Section = Color3.fromRGB(168, 179, 196),
-		Element = Color3.fromRGB(145, 159, 180),
-		Text = Color3.fromRGB(38, 45, 58),
-		TextDim = Color3.fromRGB(48, 57, 72),
-		TextMute = Color3.fromRGB(76, 88, 108),
+	["Crimson"] = {
+		Bg = Color3.fromRGB(38, 18, 24),
+		Panel = Color3.fromRGB(54, 25, 34),
+		Section = Color3.fromRGB(73, 33, 45),
+		Element = Color3.fromRGB(94, 43, 56),
+		Text = Color3.fromRGB(255, 242, 244),
+		TextDim = Color3.fromRGB(224, 184, 192),
+		TextMute = Color3.fromRGB(160, 112, 122),
+	},
+	["Emerald"] = {
+		Bg = Color3.fromRGB(16, 34, 27),
+		Panel = Color3.fromRGB(22, 48, 38),
+		Section = Color3.fromRGB(30, 64, 50),
+		Element = Color3.fromRGB(39, 82, 64),
+		Text = Color3.fromRGB(239, 255, 247),
+		TextDim = Color3.fromRGB(182, 219, 197),
+		TextMute = Color3.fromRGB(112, 158, 132),
+	},
+	["Violet"] = {
+		Bg = Color3.fromRGB(29, 19, 42),
+		Panel = Color3.fromRGB(41, 27, 59),
+		Section = Color3.fromRGB(55, 37, 78),
+		Element = Color3.fromRGB(71, 48, 101),
+		Text = Color3.fromRGB(249, 242, 255),
+		TextDim = Color3.fromRGB(208, 190, 230),
+		TextMute = Color3.fromRGB(148, 122, 176),
+	},
+	["Rose"] = {
+		Bg = Color3.fromRGB(39, 21, 33),
+		Panel = Color3.fromRGB(56, 30, 47),
+		Section = Color3.fromRGB(75, 39, 62),
+		Element = Color3.fromRGB(96, 50, 78),
+		Text = Color3.fromRGB(255, 243, 250),
+		TextDim = Color3.fromRGB(226, 190, 211),
+		TextMute = Color3.fromRGB(163, 123, 146),
+	},
+	["AMOLED"] = {
+		Bg = Color3.fromRGB(0, 0, 0),
+		Panel = Color3.fromRGB(8, 8, 10),
+		Section = Color3.fromRGB(16, 16, 19),
+		Element = Color3.fromRGB(25, 25, 30),
+		Text = Color3.fromRGB(255, 255, 255),
+		TextDim = Color3.fromRGB(196, 196, 205),
+		TextMute = Color3.fromRGB(126, 126, 140),
 	},
 }
 
@@ -2378,7 +2414,7 @@ buildSettingsView = function(window)
 		return card
 	end
 
-	local themeCard = createCard("Appearance", 104)
+	local themeCard = createCard("Appearance", 136)
 	label({
 		Size = UDim2.new(1, 0, 0, 14),
 		Position = UDim2.fromOffset(0, 22),
@@ -2388,11 +2424,13 @@ buildSettingsView = function(window)
 		ZIndex = 16,
 	}, themeCard)
 	local themeButtons = {}
-	local themeNames = { "Stardust", "Midnight", "Ocean", "Light" }
+	local themeNames = { "Stardust", "Midnight", "Ocean", "Crimson", "Emerald", "Violet", "Rose", "AMOLED" }
 	for index, name in ipairs(themeNames) do
+		local column = (index - 1) % 4
+		local row = math.floor((index - 1) / 4)
 		local button = make("TextButton", {
 			Size = UDim2.new(0.25, -5, 0, 28),
-			Position = UDim2.new((index - 1) * 0.25, (index - 1) * 2, 0, 49),
+			Position = UDim2.new(column * 0.25, column * 2, 0, 49 + row * 32),
 			BackgroundColor3 = THEME.Element,
 			BackgroundTransparency = 0.2,
 			Text = name,
