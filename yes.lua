@@ -1218,7 +1218,7 @@ function StardustUI.new(opts)
 	self:SavePersistentSettings()
 
 	-- Auto-load after elements have a chance to register
-	if self.AutoLoad then
+	if self.AutoLoad and not _G.MishkaDisableAutoLoad then
 		task.spawn(function()
 			for i=1, 3 do
 				task.wait(0.8 * i)
