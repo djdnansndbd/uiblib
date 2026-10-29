@@ -3298,12 +3298,17 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 			local ok, err = pcall(callback, state)
 			if not ok then warn("[StardustUI]", err) end
 		end
-		if fire and save ~= false and self.Tab.Window.AutoSave then
-			self.Tab.Window:SaveConfig()
+		if fire and save ~= false then
+			pcall(function() self.Tab.Window:SaveConfig() end)
 		end
 	end
 
 	btn.MouseButton1Click:Connect(function() apply(not state, true) end)
+	holder.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			apply(not state, true)
+		end
+	end)
 
 	table.insert(self.Tab.Window._resetters, function()
 		if state then apply(false, true) end
