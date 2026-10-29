@@ -11,6 +11,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 local rng = Random.new()
 
 StardustUI._closeActiveDropdown = nil
+local windowCleanupKey = "__StardustUICleanup"
 
 ---------------------------------------------------------------------
 -- THEME
@@ -99,6 +100,57 @@ local function label(props, parent)
 	}
 	for k, v in pairs(props) do base[k] = v end
 	return make("TextLabel", base, parent)
+end
+
+local function addInfoTooltip(window, target, info)
+	if type(info) ~= "string" or info == "" then return end
+
+	local tooltip = make("Frame", {
+		Size = UDim2.new(0, 230, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.05,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 100,
+	}, window.Gui)
+	corner(tooltip, UDim.new(0, 6))
+	stroke(tooltip, WHITE, 1, 0.65)
+	label({
+		Position = UDim2.fromOffset(8, 6),
+		Size = UDim2.new(1, -16, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Text = info,
+		TextSize = 11,
+		TextWrapped = true,
+		ZIndex = 101,
+	}, tooltip)
+
+	target.MouseEnter:Connect(function()
+		if window.Destroyed then return end
+		tooltip.Visible = true
+		task.defer(function()
+			if not tooltip.Parent or not tooltip.Visible then return end
+			local camera = workspace.CurrentCamera
+			if not camera then return end
+			local viewport = camera.ViewportSize
+			local size = tooltip.AbsoluteSize
+			local targetPosition = target.AbsolutePosition
+			local targetSize = target.AbsoluteSize
+			local x = math.clamp(targetPosition.X, 4, math.max(4, viewport.X - size.X - 4))
+			local y = targetPosition.Y + targetSize.Y + 4
+			if y + size.Y > viewport.Y then
+				y = math.max(4, targetPosition.Y - size.Y - 4)
+			end
+			tooltip.Position = UDim2.fromOffset(x, y)
+		end)
+	end)
+	target.MouseLeave:Connect(function()
+		tooltip.Visible = false
+	end)
+	target.Destroying:Connect(function()
+		tooltip:Destroy()
+	end)
 end
 
 local function tween(inst, props, info)
@@ -770,6 +822,15 @@ local buildHomeView
 
 function StardustUI.new(opts)
 	opts = opts or {}
+	local previousCleanup = _G[windowCleanupKey]
+	if type(previousCleanup) == "function" then
+		previousCleanup()
+	end
+	local previousGui = playerGui:FindFirstChild("StardustUI")
+	if previousGui then
+		previousGui:Destroy()
+	end
+
 	local self = setmetatable({}, Window)
 	self.Title = opts.Title or "StardustUI"
 	self.Subtitle = opts.Subtitle or ""
@@ -838,6 +899,14 @@ function StardustUI.new(opts)
 		end)
 	end
 	table.insert(StardustUI._windows, self)
+	local cleanup = function()
+		self:Destroy()
+		if self.Gui and self.Gui.Parent then
+			self.Gui:Destroy()
+		end
+	end
+	self._cleanupCallback = cleanup
+	_G[windowCleanupKey] = cleanup
 
 	-- Auto-load after elements have a chance to register
 	if self.AutoLoad then
@@ -1388,9 +1457,7 @@ function Window:_showQuitConfirm()
 	cancelBtn.MouseButton1Click:Connect(closeDialog)
 	confirmBtn.MouseButton1Click:Connect(function()
 		closeDialog()
-		for _, reset in ipairs(self._resetters) do
-			pcall(reset)
-		end
+		self:_resetToggles()
 		task.delay(0.15, function()
 			self:Destroy()
 			local remaining = 0
@@ -1418,9 +1485,28 @@ function Window:Toggle(v)
 	self.Frame.Visible = self.Visible
 end
 
+function Window:_resetToggles()
+	for _, reset in ipairs(self._resetters) do
+		local ok, err = pcall(reset)
+		if not ok then
+			warn("[StardustUI] Could not reset toggle:", err)
+		end
+	end
+end
+
 function Window:Destroy()
 	if self.Destroyed then return end
+	self:_resetToggles()
 	self.Destroyed = true
+	if _G[windowCleanupKey] == self._cleanupCallback then
+		_G[windowCleanupKey] = nil
+	end
+	if StardustUI._windows then
+		local index = table.find(StardustUI._windows, self)
+		if index then
+			table.remove(StardustUI._windows, index)
+		end
+	end
 	for _, c in ipairs(self.Connections) do
 		if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
 	end
@@ -1953,7 +2039,14 @@ end
 ---------------------------------------------------------------------
 -- ELEMENTS (ConfigKey support added)
 ---------------------------------------------------------------------
-function Section:Button(text, callback)
+function Section:Button(text, infoOrCallback, callback)
+	local info
+	if type(infoOrCallback) == "string" then
+		info = infoOrCallback
+	else
+		callback = infoOrCallback
+	end
+
 	local btn = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 32),
 		BackgroundColor3 = THEME.Element,
@@ -1972,6 +2065,7 @@ function Section:Button(text, callback)
 		Text = text, TextColor3 = WHITE,
 		Font = THEME.FontBold, TextSize = 13, ZIndex = 16,
 	}, btn)
+	addInfoTooltip(self.Tab.Window, btn, info)
 
 	applyHoverEffect(btn, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 	btn.MouseEnter:Connect(function() tween(txt, { TextColor3 = WHITE }) end)
@@ -1990,7 +2084,17 @@ function Section:Button(text, callback)
 	}
 end
 
-function Section:Toggle(text, default, callback, configKey)
+function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfigKey, configKey)
+	local info, default, callback
+	if type(infoOrDefault) == "string" then
+		info = infoOrDefault
+		default = defaultOrCallback
+		callback = callbackOrConfigKey
+	else
+		default = infoOrDefault
+		callback = defaultOrCallback
+		configKey = callbackOrConfigKey
+	end
 	default = default == true
 	local state = default
 
@@ -2026,6 +2130,7 @@ function Section:Toggle(text, default, callback, configKey)
 		BorderSizePixel = 0, ZIndex = 17,
 	}, btn)
 	corner(knob, UDim.new(1, 0))
+	addInfoTooltip(self.Tab.Window, holder, info)
 
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 
@@ -2217,7 +2322,19 @@ function Section:Textbox(text, default, callback, configKey)
 	}
 end
 
-function Section:MultiDropdown(text, options, default, callback, configKey)
+function Section:MultiDropdown(text, infoOrOptions, optionsOrDefault, defaultOrCallback, callbackOrConfigKey, configKey)
+	local info, options, default, callback
+	if type(infoOrOptions) == "string" then
+		info = infoOrOptions
+		options = optionsOrDefault
+		default = defaultOrCallback
+		callback = callbackOrConfigKey
+	else
+		options = infoOrOptions
+		default = optionsOrDefault
+		callback = defaultOrCallback
+		configKey = callbackOrConfigKey
+	end
 	options = options or {}
 	local selected = {}
 	local open = false
@@ -2262,6 +2379,7 @@ function Section:MultiDropdown(text, options, default, callback, configKey)
 		LayoutOrder = 1,
 		ZIndex = 16,
 	}, container)
+	addInfoTooltip(self.Tab.Window, header, info)
 	make("UIPadding", {
 		PaddingLeft = UDim.new(0, 12),
 		PaddingRight = UDim.new(0, 12),
@@ -2294,14 +2412,18 @@ function Section:MultiDropdown(text, options, default, callback, configKey)
 		ZIndex = 17,
 	}, header)
 
-	local listFrame = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 0),
+	local listFrame = make("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 0, 34),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
 		LayoutOrder = 2,
 		ZIndex = 16,
-		AutomaticSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = THEME.TextMute,
 	}, container)
 	make("UIPadding", {
 		PaddingLeft = UDim.new(0, 4),
@@ -2399,6 +2521,8 @@ function Section:MultiDropdown(text, options, default, callback, configKey)
 				notifyChanged()
 			end)
 		end
+		local visibleRows = math.min(#rows, 5)
+		listFrame.Size = UDim2.new(1, 0, 0, 34 + visibleRows * 28)
 		updateRows()
 	end
 	rebuild()
@@ -2481,7 +2605,19 @@ function Section:MultiDropdown(text, options, default, callback, configKey)
 	}
 end
 
-function Section:Dropdown(text, options, default, callback, configKey)
+function Section:Dropdown(text, infoOrOptions, optionsOrDefault, defaultOrCallback, callbackOrConfigKey, configKey)
+	local info, options, default, callback
+	if type(infoOrOptions) == "string" then
+		info = infoOrOptions
+		options = optionsOrDefault
+		default = defaultOrCallback
+		callback = callbackOrConfigKey
+	else
+		options = infoOrOptions
+		default = optionsOrDefault
+		callback = defaultOrCallback
+		configKey = callbackOrConfigKey
+	end
 	options = options or {}
 	default = default or (options[1] or "")
 	local value = default
@@ -2520,6 +2656,8 @@ function Section:Dropdown(text, options, default, callback, configKey)
 		LayoutOrder = 1,
 		ZIndex = 16,
 	}, container)
+	addInfoTooltip(self.Tab.Window, header, info)
+
 	make("UIPadding", {
 		PaddingLeft = UDim.new(0, 12),
 		PaddingRight = UDim.new(0, 12),
@@ -2553,14 +2691,18 @@ function Section:Dropdown(text, options, default, callback, configKey)
 		ZIndex = 17,
 	}, header)
 
-	local listFrame = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 0),
+	local listFrame = make("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 0, 8),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
 		LayoutOrder = 2,
 		ZIndex = 16,
-		AutomaticSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = THEME.TextMute,
 	}, container)
 	make("UIPadding", {
 		PaddingLeft = UDim.new(0, 4),
@@ -2619,9 +2761,16 @@ function Section:Dropdown(text, options, default, callback, configKey)
 
 	local function applyFilter()
 		local q = filterText:lower()
+		local visibleCount = 0
 		for _, it in ipairs(items) do
 			it.Visible = (q == "" or it.Text:lower():find(q, 1, true) ~= nil)
+			if it.Visible then
+				visibleCount += 1
+			end
 		end
+		local rowsToShow = math.min(visibleCount, 5) + (searchBox and 1 or 0)
+		local spacingCount = math.max(0, rowsToShow - 1)
+		listFrame.Size = UDim2.new(1, 0, 0, 8 + rowsToShow * 26 + spacingCount * 2)
 		selectedIdx = 1
 		updateHighlight()
 	end
