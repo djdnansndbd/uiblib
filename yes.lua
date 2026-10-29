@@ -3299,7 +3299,12 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 			if not ok then warn("[StardustUI]", err) end
 		end
 		if fire and save ~= false then
-			pcall(function() self.Tab.Window:SaveConfig() end)
+			task.defer(function()
+				local win = self.Tab.Window
+				if win and win.SaveConfig then
+					pcall(function() win:SaveConfig() end)
+				end
+			end)
 		end
 	end
 
