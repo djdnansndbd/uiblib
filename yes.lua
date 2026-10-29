@@ -3297,12 +3297,14 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 	applyHoverEffect(holder, nil, THEME.Element, Color3.fromRGB(85, 85, 98), THEME.TrElement, 0.6, st, 0.55, 0.2)
 
 	local function apply(v, fire, save)
-		state = v
-		tween(btn, { BackgroundColor3 = state and WHITE or THEME.Section, BackgroundTransparency = state and 0 or 0.3 })
-		tween(knob, {
-			Position = state and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
-			BackgroundColor3 = state and BLACK or WHITE,
-		})
+		local val = v == true
+		state = val
+		pcall(function()
+			btn.BackgroundColor3 = val and WHITE or THEME.Section
+			btn.BackgroundTransparency = val and 0 or 0.3
+			knob.Position = val and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+			knob.BackgroundColor3 = val and BLACK or WHITE
+		end)
 		if fire and callback then
 			local ok, err = pcall(callback, state)
 			if not ok then warn("[StardustUI]", err) end
@@ -3317,31 +3319,45 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 		end
 	end
 
-	btn.MouseButton1Click:Connect(function() apply(not state, true) end)
+	btn.MouseButton1Click:Connect(function() apply(not state, true, true) end)
 	holder.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			apply(not state, true)
+			apply(not state, true, true)
 		end
 	end)
 
 	table.insert(self.Tab.Window._resetters, function()
-		if state then apply(false, true) end
+		if state then apply(false, true, true) end
 	end)
 
-	self.Tab.Window:_register(configKey, function() return state end, function(v) 
-		apply(v == true, true, false)
-		task.defer(function() apply(v == true, true, false) end)
-		task.wait()
-		apply(v == true, true, false)
+	self.Tab.Window:_register(configKey, function() return state end, function(v)
+		local val = v == true
+		state = val
+		pcall(function()
+			btn.BackgroundColor3 = val and WHITE or THEME.Section
+			btn.BackgroundTransparency = val and 0 or 0.3
+			knob.Position = val and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+			knob.BackgroundColor3 = val and BLACK or WHITE
+		end)
+		if callback then
+			pcall(callback, state)
+		end
 	end)
 	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
-		Set = function(_, v) 
-			apply(v == true, true, false)
-			task.defer(function() apply(v == true, true, false) end)
-			task.wait()
-			pcall(function() apply(v == true, true, false) end)
+		Set = function(_, v)
+			local val = v == true
+			state = val
+			pcall(function()
+				btn.BackgroundColor3 = val and WHITE or THEME.Section
+				btn.BackgroundTransparency = val and 0 or 0.3
+				knob.Position = val and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+				knob.BackgroundColor3 = val and BLACK or WHITE
+			end)
+			if callback then
+				pcall(callback, state)
+			end
 		end,
 		Get = function() return state end,
 		Destroy = function() holder:Destroy() end,
