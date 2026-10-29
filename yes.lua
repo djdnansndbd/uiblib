@@ -1220,8 +1220,8 @@ function StardustUI.new(opts)
 	-- Auto-load after elements have a chance to register
 	if self.AutoLoad then
 		task.spawn(function()
-			for i=1, 6 do
-				task.wait(0.4 * i)
+			for i=1, 3 do
+				task.wait(0.8 * i)
 				if self.Destroyed then break end
 				pcall(function() self:LoadConfig() end)
 			end
@@ -1293,18 +1293,6 @@ function Window:LoadConfig()
 	if type(data.__StardustTheme) == "string" then
 		self:SetTheme(data.__StardustTheme)
 	end
-	for key, raw in pairs(data) do
-		if string.sub(key, 1, 10) ~= "__Stardust" then
-			local entry = self._configElements[key]
-			if entry then
-				local value = deserialize(raw)
-				pcall(function() entry.Set(value) end)
-				task.defer(function() pcall(function() entry.Set(value) end) end)
-			end
-		end
-	end
-	-- Force second pass
-	task.wait()
 	for key, raw in pairs(data) do
 		if string.sub(key, 1, 10) ~= "__Stardust" then
 			local entry = self._configElements[key]
@@ -3342,6 +3330,26 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 		if callback then
 			pcall(callback, state)
 		end
+		task.defer(function()
+			local val2 = v == true
+			state = val2
+			pcall(function()
+				btn.BackgroundColor3 = val2 and WHITE or THEME.Section
+				btn.BackgroundTransparency = val2 and 0 or 0.3
+				knob.Position = val2 and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+				knob.BackgroundColor3 = val2 and BLACK or WHITE
+			end)
+			if callback then pcall(callback, state) end
+		end)
+		task.wait()
+		state = v == true
+		pcall(function()
+			btn.BackgroundColor3 = state and WHITE or THEME.Section
+			btn.BackgroundTransparency = state and 0 or 0.3
+			knob.Position = state and UDim2.new(1, -15, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+			knob.BackgroundColor3 = state and BLACK or WHITE
+		end)
+		if callback then pcall(callback, state) end
 	end)
 	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
