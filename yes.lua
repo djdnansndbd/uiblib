@@ -3314,7 +3314,7 @@ function Section:Toggle(text, infoOrDefault, defaultOrCallback, callbackOrConfig
 		if state then apply(false, true) end
 	end)
 
-	self.Tab.Window:_register(configKey, function() return state end, function(v) apply(v == true, true, false) end)
+	self.Tab.Window:_register(configKey, function() return state end, function(v) apply(v == true, false, false) end)
 	self.Tab.Window:_registerSearchItem(text, self.Tab, holder, self.Name)
 
 	return {
