@@ -226,6 +226,7 @@ local function applyTheme(window, themeName)
 	for _, button in ipairs({ window.CloseButton, window.HomeButton, window.SettingsButton }) do
 		if button then
 			button.BackgroundColor3 = preset.Element
+			button.BackgroundTransparency = 0.4
 		end
 	end
 	for key, value in pairs(preset) do
@@ -1392,7 +1393,7 @@ function Window:_build()
 	corner(closeBtn, UDim.new(0, 6))
 	self.CloseButton = closeBtn
 	animatedStroke(closeBtn, 1.4, 0.2)
-	applyHoverEffect(closeBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
+	applyHoverEffect(closeBtn, nil, function() return THEME.Element end, function() return THEME.Element end, 0.4, 0.2)
 	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { TextColor3 = BLACK }) end)
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = WHITE }) end)
 	closeBtn.MouseButton1Click:Connect(function() self:_showQuitConfirm() end)
@@ -1414,7 +1415,7 @@ function Window:_build()
 	corner(homeBtn, UDim.new(0, 6))
 	self.HomeButton = homeBtn
 	animatedStroke(homeBtn, 1.2, 0.35)
-	applyHoverEffect(homeBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
+	applyHoverEffect(homeBtn, nil, function() return THEME.Element end, function() return THEME.Element end, 0.4, 0.2)
 	homeBtn.Activated:Connect(function() self:ShowHome() end)
 
 	local settingsBtn = make("TextButton", {
@@ -1434,7 +1435,7 @@ function Window:_build()
 	corner(settingsBtn, UDim.new(0, 6))
 	self.SettingsButton = settingsBtn
 	animatedStroke(settingsBtn, 1.2, 0.35)
-	applyHoverEffect(settingsBtn, nil, function() return THEME.Element end, WHITE, 0.4, 0)
+	applyHoverEffect(settingsBtn, nil, function() return THEME.Element end, function() return THEME.Element end, 0.4, 0.2)
 	settingsBtn.Activated:Connect(function() self:ShowSettings() end)
 
 	-- TAB SIDEBAR
