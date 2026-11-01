@@ -557,10 +557,14 @@ do
 		local Luminance = High / 255
 
 		if High - Low <= 16 then
+			-- Anything already near-white stays pure snow
+			if Luminance >= 0.9 then
+				return SNOW
+			end
 			if Luminance <= 0.4 then
 				return Mix(DEEP_BLUE, BABY_BLUE, Luminance / 0.4)
 			end
-			return Mix(BABY_BLUE, ICE, (Luminance - 0.4) / 0.6)
+			return Mix(BABY_BLUE, ICE, (Luminance - 0.4) / 0.5)
 		end
 
 		-- Warm accents (the old orange) turn snow white
