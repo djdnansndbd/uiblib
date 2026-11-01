@@ -417,7 +417,7 @@ EggSection:Toggle(
 				return
 			end
 
-			State.EggSequence = 0
+			-- Seq deliberately keeps climbing across toggles: off at 1276 -> on fires 1277
 			pcall(function()
 				if player.Character then
 					player.Character:PivotTo(Spot.CFrame)
