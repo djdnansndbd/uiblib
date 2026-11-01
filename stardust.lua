@@ -525,28 +525,28 @@ end))
 
 getgenv().StarDust = wax
 
---// Christmas Theme (winter blue, snow, white accents) \\--
+--// Purple / Orange Theme (star logo) \\--
 do
 	local ScreenGui = wax.shared.ScreenGui
 	if not ScreenGui then
 		return
 	end
 
-	-- Palette (deep, matte winter navy -- nothing bright) ----------------
-	local SNOW = Color3.fromRGB(255, 255, 255)
-	local ICE = Color3.fromRGB(206, 224, 238)
-	local FROST = Color3.fromRGB(118, 148, 174)
-	local SLATE = Color3.fromRGB(44, 60, 78)
-	local DEEP = Color3.fromRGB(22, 32, 44)
-	local INK = Color3.fromRGB(18, 28, 40)
-	local ICY_INK = Color3.fromRGB(166, 204, 228)
+	-- Palette ------------------------------------------------------------
+	local ORANGE = Color3.fromRGB(255, 140, 30)
+	local ORANGE_SOFT = Color3.fromRGB(255, 176, 92)
+	local DEEP = Color3.fromRGB(18, 10, 30)
+	local GRAPE = Color3.fromRGB(58, 36, 84)
+	local MID = Color3.fromRGB(72, 44, 110)
+	local LIGHT = Color3.fromRGB(236, 228, 255)
+	local MUTED = Color3.fromRGB(168, 140, 208)
 
 	local function Mix(A, B, T)
 		return A:Lerp(B, math.clamp(T, 0, 1))
 	end
 
-	-- Surfaces: dark greys become deep winter blue, light greys become snow
-	local function RecolorSurface(Color)
+	-- Greys ride a purple ramp so contrast survives; greens become pumpkin orange
+	local function Recolor(Color)
 		if typeof(Color) ~= "Color3" then
 			return Color
 		end
@@ -557,61 +557,20 @@ do
 		local Luminance = High / 255
 
 		if High - Low <= 16 then
-			-- Anything already near-white stays pure snow (snow, buttons)
-			if Luminance >= 0.88 then
-				return SNOW
+			if Luminance <= 0.35 then
+				return Mix(DEEP, MID, Luminance / 0.35)
 			end
-			if Luminance <= 0.5 then
-				return Mix(DEEP, SLATE, Luminance / 0.5)
-			end
-			return Mix(SLATE, FROST, (Luminance - 0.5) / 0.38)
+			return Mix(MID, LIGHT, (Luminance - 0.35) / 0.65)
 		end
 
-		-- Warm accents (the old orange) turn snow white
-		if R >= G and G >= B and (G - B) > 25 then
-			return SNOW
-		end
-
-		-- Greens become a cold steel blue
+		-- Greens (old success/toggle green) become pumpkin orange
 		if G >= R and G >= B then
-			return ICY_INK
+			return ORANGE
 		end
 
-		return Color
-	end
-
-	-- Text/icons keep their brightness, only the hue is pulled cold
-	local function RecolorInk(Color)
-		if typeof(Color) ~= "Color3" then
-			return Color
-		end
-
-		local R, G, B = Color.R * 255, Color.G * 255, Color.B * 255
-		local High = math.max(R, G, B)
-		local Low = math.min(R, G, B)
-		local Luminance = High / 255
-
-		if High - Low <= 22 then
-			if Luminance >= 0.45 then
-				return Mix(ICE, SNOW, (Luminance - 0.45) / 0.55)
-			end
-			-- Dark text stays dark so it survives on white buttons
-			return Mix(INK, SLATE, Luminance / 0.45)
-		end
-
-		-- Warm accents become snow white ink
-		if R >= G and G >= B and (G - B) > 25 then
-			return SNOW
-		end
-
-		-- Light reds/pinks become a soft frost rose
-		if R >= G and G >= B and (R - G) > 40 and (G - B) <= 25 then
-			return Color3.fromRGB(236, 150, 160)
-		end
-
-		-- Greens become a cold steel blue
-		if G >= R and G >= B then
-			return ICY_INK
+		-- Anything already warm stays in the orange family
+		if R >= G and G >= B and (G - B) > 25 and (R - G) > 40 then
+			return ORANGE
 		end
 
 		return Color
@@ -627,11 +586,11 @@ do
 				local Color = Instance.Color
 				local High = math.max(Color.R, Color.G, Color.B) * 255
 				local Low = math.min(Color.R, Color.G, Color.B) * 255
-				if High - Low <= 22 and High < 140 then
-					Instance.Color = FROST
+				if High - Low <= 22 and High < 150 then
+					Instance.Color = MUTED
 					Instance.Transparency = math.max(Instance.Transparency, 0.5)
 				else
-					Instance.Color = RecolorSurface(Color)
+					Instance.Color = Recolor(Color)
 				end
 			end)
 			return
@@ -641,7 +600,7 @@ do
 			pcall(function()
 				local Keypoints = {}
 				for _, Keypoint in ipairs(Instance.Color.Keypoints) do
-					table.insert(Keypoints, ColorSequenceKeypoint.new(Keypoint.Time, RecolorSurface(Keypoint.Value)))
+					table.insert(Keypoints, ColorSequenceKeypoint.new(Keypoint.Time, Recolor(Keypoint.Value)))
 				end
 				Instance.Color = ColorSequence.new(Keypoints)
 			end)
@@ -650,39 +609,28 @@ do
 
 		if Instance:IsA("ScrollingFrame") then
 			pcall(function()
-				Instance.ScrollBarImageColor3 = FROST
-				Instance.ScrollBarImageTransparency = 0.15
+				Instance.ScrollBarImageColor3 = MUTED
+				Instance.ScrollBarImageTransparency = 0.25
 				if Instance.ScrollBarThickness > 0 then
 					Instance.ScrollBarThickness = math.max(Instance.ScrollBarThickness, 5)
 				end
 			end)
 		end
 
-		pcall(function()
-			if typeof(Instance.BackgroundColor3) == "Color3" then
-				Instance.BackgroundColor3 = RecolorSurface(Instance.BackgroundColor3)
-			end
-		end)
-		pcall(function()
-			if typeof(Instance.TextColor3) == "Color3" then
-				Instance.TextColor3 = RecolorInk(Instance.TextColor3)
-			end
-		end)
-		pcall(function()
-			if typeof(Instance.ImageColor3) == "Color3" then
-				Instance.ImageColor3 = RecolorInk(Instance.ImageColor3)
-			end
-		end)
-		pcall(function()
-			if typeof(Instance.TextStrokeColor3) == "Color3" then
-				Instance.TextStrokeColor3 = RecolorInk(Instance.TextStrokeColor3)
-			end
-		end)
-		pcall(function()
-			if typeof(Instance.PlaceholderColor3) == "Color3" then
-				Instance.PlaceholderColor3 = RecolorInk(Instance.PlaceholderColor3)
-			end
-		end)
+		for _, Property in ipairs({
+			"BackgroundColor3",
+			"TextColor3",
+			"ImageColor3",
+			"TextStrokeColor3",
+			"PlaceholderColor3",
+		}) do
+			pcall(function()
+				local Current = Instance[Property]
+				if typeof(Current) == "Color3" then
+					Instance[Property] = Recolor(Current)
+				end
+			end)
+		end
 	end
 
 	local AssetManager = require(script.Utils.UI.Assets.Manager)
@@ -714,12 +662,12 @@ do
 		Label.Image = ""
 
 		local Star = Instance.new("TextLabel")
-		Star.Name = "ChristmasStarLogo"
+		Star.Name = "StarDustLogo"
 		Star.BackgroundTransparency = 1
 		Star.Text = "★"
 		Star.TextScaled = true
 		Star.Font = Enum.Font.GothamBold
-		Star.TextColor3 = SNOW
+		Star.TextColor3 = Color3.new(1, 1, 1)
 		Star.AnchorPoint = Label.AnchorPoint
 		Star.Position = Label.Position
 		Star.Size = Label.Size
@@ -729,7 +677,7 @@ do
 		Star.Parent = Label.Parent
 
 		local StarStroke = Instance.new("UIStroke")
-		StarStroke.Color = Color3.fromRGB(140, 184, 214)
+		StarStroke.Color = MUTED
 		StarStroke.Thickness = 1
 		StarStroke.Transparency = 0.55
 		StarStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -742,98 +690,12 @@ do
 		ReplaceLogo(Object)
 	end
 
-	-- Settled snow -------------------------------------------------------
-	local function CreateSnowCap(Parent, ZIndex)
-		local Cap = Instance.new("Frame")
-		Cap.Name = "SnowCap"
-		Cap.BackgroundTransparency = 1
-		Cap.BorderSizePixel = 0
-		Cap.Active = false
-		Cap.Interactable = false
-		Cap.Size = UDim2.new(1, 0, 0, 14)
-		Cap.Position = UDim2.new(0, 0, 0, 0)
-		Cap.ZIndex = ZIndex
-		Cap.Parent = Parent
-
-		-- Soft rim that melts into the window
-		local Rim = Instance.new("Frame")
-		Rim.Name = "Rim"
-		Rim.Size = UDim2.new(1, 0, 0, 5)
-		Rim.BackgroundColor3 = SNOW
-		Rim.BackgroundTransparency = 0.05
-		Rim.BorderSizePixel = 0
-		Rim.ZIndex = ZIndex
-		Rim.Parent = Cap
-
-		local RimCorner = Instance.new("UICorner")
-		RimCorner.CornerRadius = UDim.new(0, 6)
-		RimCorner.Parent = Rim
-
-		local Fade = Instance.new("UIGradient")
-		Fade.Rotation = 90
-		Fade.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.05),
-			NumberSequenceKeypoint.new(0.6, 0.4),
-			NumberSequenceKeypoint.new(1, 1),
-		})
-		Fade.Parent = Rim
-
-		local Bumps = Instance.new("Frame")
-		Bumps.Name = "Bumps"
-		Bumps.BackgroundTransparency = 1
-		Bumps.BorderSizePixel = 0
-		Bumps.Size = UDim2.fromScale(1, 1)
-		Bumps.ZIndex = ZIndex + 1
-		Bumps.Parent = Cap
-
-		local LastWidth = 0
-
-		local function Rebuild()
-			local Width = Cap.AbsoluteSize.X
-			if Width <= 1 or math.abs(Width - LastWidth) < 6 then
-				return
-			end
-			LastWidth = Width
-
-			for _, Child in ipairs(Bumps:GetChildren()) do
-				if Child:IsA("Frame") then
-					Child:Destroy()
-				end
-			end
-
-			local Count = math.clamp(math.floor(Width / 17), 14, 120)
-			local Spacing = Width / Count
-
-			for Index = 0, Count do
-				local Bump = Instance.new("Frame")
-				Bump.Name = "Bump"
-				Bump.AnchorPoint = Vector2.new(0.5, 0.5)
-				Bump.Position = UDim2.new(0, Index * Spacing + (math.random() - 0.5) * Spacing * 0.7, 0, -1.5 + math.random() * 1.5)
-				Bump.Size = UDim2.fromOffset(
-					Spacing * (1.55 + math.random() * 0.55),
-					5 + math.random() * 4
-				)
-				Bump.BackgroundColor3 = SNOW
-				Bump.BackgroundTransparency = 0.03 + math.random() * 0.09
-				Bump.BorderSizePixel = 0
-				Bump.ZIndex = ZIndex + 1
-				Bump.Parent = Bumps
-
-				local Corner = Instance.new("UICorner")
-				Corner.CornerRadius = UDim.new(1, 0)
-				Corner.Parent = Bump
-			end
-		end
-
-		Rebuild()
-		Cap:GetPropertyChangedSignal("AbsoluteSize"):Connect(Rebuild)
-	end
-
 	-- Initial pass -------------------------------------------------------
 	for _, Object in ipairs(ScreenGui:GetDescendants()) do
 		Process(Object)
 	end
 
+	-- Catch anything built later (pages, notifications, modals...)
 	ScreenGui.DescendantAdded:Connect(function(Object)
 		task.defer(Process, Object)
 	end)
@@ -850,12 +712,12 @@ do
 	if MainFrame then
 		local Stroke = Instance.new("UIStroke")
 		Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		Stroke.Color = FROST
+		Stroke.Color = ORANGE_SOFT
 		Stroke.Thickness = 1
-		Stroke.Transparency = 0.4
+		Stroke.Transparency = 0.6
 		Stroke.Parent = MainFrame
 
-		-- Subtle frost accent line under the topbar
+		-- Orange accent line under the topbar
 		for _, Child in ipairs(MainFrame:GetChildren()) do
 			if
 				Child:IsA("Frame")
@@ -865,9 +727,9 @@ do
 				and Child.Size.Y.Offset == 36
 			then
 				local Accent = Instance.new("Frame")
-				Accent.Name = "SnowAccent"
-				Accent.BackgroundColor3 = FROST
-				Accent.BackgroundTransparency = 0.45
+				Accent.Name = "TopbarAccent"
+				Accent.BackgroundColor3 = ORANGE
+				Accent.BackgroundTransparency = 0.3
 				Accent.BorderSizePixel = 0
 				Accent.Size = UDim2.new(1, 0, 0, 1)
 				Accent.Position = UDim2.new(0, 0, 1, -1)
@@ -876,8 +738,6 @@ do
 				break
 			end
 		end
-
-		CreateSnowCap(MainFrame, 60)
 	end
 end
 
@@ -14905,11 +14765,11 @@ local function SetupDialog(
 		local ButtonText = options.Text or ""
 		local ButtonIcon = options.Icon
 
-		-- Action buttons use snow white / icy blue with navy ink
+		-- Action buttons use pumpkin orange with deep purple ink
 		local IsPrimary = ButtonType == "Primary"
-		local ButtonBackground = IsPrimary and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(56, 74, 94)
-		local ButtonTextColor = IsPrimary and Color3.fromRGB(24, 36, 50) or Color3.fromRGB(214, 232, 244)
-		local ButtonStrokeColor = IsPrimary and Color3.fromRGB(214, 232, 244) or Color3.fromRGB(110, 142, 170)
+		local ButtonBackground = IsPrimary and Color3.fromRGB(255, 140, 30) or Color3.fromRGB(58, 36, 84)
+		local ButtonTextColor = IsPrimary and Color3.fromRGB(26, 14, 40) or Color3.fromRGB(236, 228, 255)
+		local ButtonStrokeColor = IsPrimary and Color3.fromRGB(255, 176, 92) or Color3.fromRGB(126, 96, 166)
 
 		local Button = Interface.New("ImageButton", {
 			SizeConstraint = Enum.SizeConstraint.RelativeYY,
@@ -14963,7 +14823,7 @@ local function SetupDialog(
 			Parent = Button,
 		})
 
-		local ButtonHoverBackground = IsPrimary and Color3.fromRGB(232, 242, 250) or Color3.fromRGB(92, 122, 150)
+		local ButtonHoverBackground = IsPrimary and Color3.fromRGB(255, 162, 66) or Color3.fromRGB(74, 48, 106)
 
 		Button.MouseEnter:Connect(function()
 			wax.shared.TweenService
@@ -15965,7 +15825,7 @@ return function(Props: {
 	local function CreateToggle(Parent: GuiObject, Filter: CallFilter)
 		local Toggle = Interface.New("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			BackgroundColor3 = if Filter.Enabled then Color3.fromRGB(186, 214, 232) else Color3.fromRGB(40, 54, 70),
+			BackgroundColor3 = if Filter.Enabled then Color3.fromRGB(255, 140, 30) else Color3.fromRGB(22, 13, 34),
 			Position = UDim2.new(1, -38, 0.5, 0),
 			Size = UDim2.fromOffset(32, 18),
 			Text = "",
@@ -15974,7 +15834,7 @@ return function(Props: {
 		})
 		local Knob = Interface.New("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = if Filter.Enabled then Color3.fromRGB(26, 40, 56) else Color3.fromRGB(188, 214, 232),
+			BackgroundColor3 = if Filter.Enabled then Color3.fromRGB(26, 14, 40) else Color3.fromRGB(236, 228, 255),
 			Position = if Filter.Enabled then UDim2.new(1, -9, 0.5, 0) else UDim2.new(0, 9, 0.5, 0),
 			Size = UDim2.fromOffset(14, 14),
 			Parent = Toggle,
@@ -15988,12 +15848,12 @@ return function(Props: {
 			Props.Manager:SetEnabled(Filter.Id, Enabled)
 			wax.shared.TweenService
 				:Create(Toggle, Constants.DefaultTweenInfo, {
-					BackgroundColor3 = if Enabled then Color3.fromRGB(186, 214, 232) else Color3.fromRGB(40, 54, 70),
+					BackgroundColor3 = if Enabled then Color3.fromRGB(255, 140, 30) else Color3.fromRGB(22, 13, 34),
 				})
 				:Play()
 			local KnobTween = wax.shared.TweenService:Create(Knob, Constants.DefaultTweenInfo, {
 				Position = if Enabled then UDim2.new(1, -9, 0.5, 0) else UDim2.new(0, 9, 0.5, 0),
-				BackgroundColor3 = if Enabled then Color3.fromRGB(26, 40, 56) else Color3.fromRGB(188, 214, 232),
+				BackgroundColor3 = if Enabled then Color3.fromRGB(26, 14, 40) else Color3.fromRGB(236, 228, 255),
 			})
 			KnobTween:Play()
 			KnobTween.Completed:Once(function()
@@ -16178,10 +16038,10 @@ return function(props: {
 		Parent = props.Parent,
 	})
 
-	local ToggleOnColor = Color3.fromRGB(186, 214, 232)
-	local ToggleOffColor = Color3.fromRGB(40, 54, 70)
-	local ToggleKnobOnColor = Color3.fromRGB(26, 40, 56)
-	local ToggleKnobOffColor = Color3.fromRGB(188, 214, 232)
+	local ToggleOnColor = Color3.fromRGB(255, 140, 30)
+	local ToggleOffColor = Color3.fromRGB(22, 13, 34)
+	local ToggleKnobOnColor = Color3.fromRGB(26, 14, 40)
+	local ToggleKnobOffColor = Color3.fromRGB(236, 228, 255)
 
 	local ToggleKnobOffSize = UDim2.fromOffset(16, 16)
 	local ToggleKnobOnSize = UDim2.fromOffset(18, 18)
@@ -20413,7 +20273,7 @@ return function(props: {
 	})
 
 	local function CreatePluginCard(IsError: boolean, Title: string, Meta: string, Body: string)
-		local AccentColor = IsError and Color3.fromRGB(220, 55, 55) or Color3.fromRGB(55, 185, 100)
+		local AccentColor = IsError and Color3.fromRGB(224, 74, 74) or Color3.fromRGB(255, 140, 30)
 
 		local Card = Interface.New("Frame", {
 			AutomaticSize = Enum.AutomaticSize.Y,
@@ -22912,7 +22772,7 @@ return function(props: {
 	--// Resizer \\--
 	local RemoteListLine = Interface.New("Frame", {
 		AnchorPoint = Vector2.yAxis,
-		BackgroundColor3 = Color3.fromRGB(118, 148, 174),
+		BackgroundColor3 = Color3.fromRGB(168, 140, 208),
 		BackgroundTransparency = 0.45,
 		Position = UDim2.new(0, 240, 1, 0),
 		Size = UDim2.new(0, 2, 1, -36),
@@ -23658,14 +23518,14 @@ return function(props: {
 	function Calls:CreatePaginationEllipsis(Order: number, Visible: boolean)
 		local Ellipsis = {
 			Ellipsis = Interface.New("TextBox", {
-				BackgroundColor3 = Color3.fromRGB(40, 54, 70),
+				BackgroundColor3 = Color3.fromRGB(58, 36, 84),
 				Size = UDim2.fromScale(1, 1),
 				SizeConstraint = Enum.SizeConstraint.RelativeYY,
 				LayoutOrder = Order,
 				PlaceholderText = "-",
-				PlaceholderColor3 = Color3.fromRGB(130, 160, 184),
+				PlaceholderColor3 = Color3.fromRGB(150, 124, 190),
 				Text = "",
-				TextColor3 = Color3.fromRGB(214, 232, 244),
+				TextColor3 = Color3.fromRGB(236, 228, 255),
 				TextSize = 15,
 				RichText = false,
 				Parent = Visible and LogsPagination or nil,
@@ -23716,11 +23576,11 @@ return function(props: {
 	function Calls:CreatePaginationButton(Order: number, Active: boolean, Visible: boolean)
 		local ButtonData = {
 			Button = Interface.New("TextButton", {
-				BackgroundColor3 = Active and Color3.fromRGB(202, 224, 240) or Color3.fromRGB(40, 54, 70),
+				BackgroundColor3 = Active and Color3.fromRGB(255, 140, 30) or Color3.fromRGB(58, 36, 84),
 				Size = UDim2.fromScale(1, 1),
 				SizeConstraint = Enum.SizeConstraint.RelativeYY,
 				Text = tostring(1),
-				TextColor3 = Active and Color3.fromRGB(24, 36, 50) or Color3.fromRGB(192, 216, 234),
+				TextColor3 = Active and Color3.fromRGB(26, 14, 40) or Color3.fromRGB(236, 228, 255),
 				LayoutOrder = Order,
 				TextSize = 15,
 				Parent = Visible and LogsPagination or nil,
@@ -23732,8 +23592,8 @@ return function(props: {
 		}
 
 		function ButtonData:SetActive(Active: boolean)
-			self.Button.BackgroundColor3 = Active and Color3.fromRGB(202, 224, 240) or Color3.fromRGB(40, 54, 70)
-			self.Button.TextColor3 = Active and Color3.fromRGB(24, 36, 50) or Color3.fromRGB(192, 216, 234)
+			self.Button.BackgroundColor3 = Active and Color3.fromRGB(255, 140, 30) or Color3.fromRGB(58, 36, 84)
+			self.Button.TextColor3 = Active and Color3.fromRGB(26, 14, 40) or Color3.fromRGB(236, 228, 255)
 		end
 
 		function ButtonData:SetText(Text: string)
