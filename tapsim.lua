@@ -406,7 +406,7 @@ end, "eggSpot")
 
 EggSection:Toggle(
 	"Auto Open Egg",
-	"Teleports to the egg, then fires EggHatchRequested every 0.1s with a climbing Seq.",
+	"Teleports to the egg, then fires EggHatchRequested every 2s with a climbing Seq.",
 	false,
 	function(Enabled)
 		State.AutoEgg = Enabled
@@ -727,7 +727,7 @@ task.spawn(function()
 	end
 end)
 
--- Auto egg: fires EggHatchRequested every 0.1s, Seq climbs like Auto Tap
+-- Auto egg: fires EggHatchRequested every 2s, Seq climbs like Auto Tap
 task.spawn(function()
 	local EggRemote
 
@@ -761,7 +761,7 @@ task.spawn(function()
 				end
 			end
 
-			task.wait(0.1)
+			task.wait(2)
 		else
 			task.wait(0.1)
 		end
