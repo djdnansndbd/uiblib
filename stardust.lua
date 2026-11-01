@@ -532,14 +532,14 @@ do
 		return
 	end
 
-	-- Palette (dark, desaturated winter blue -- nothing neon) ------------
+	-- Palette (deep, matte winter navy -- nothing bright) ----------------
 	local SNOW = Color3.fromRGB(255, 255, 255)
-	local ICE = Color3.fromRGB(214, 232, 244)
-	local FROST = Color3.fromRGB(150, 183, 206)
-	local SLATE = Color3.fromRGB(70, 98, 126)
-	local DEEP = Color3.fromRGB(36, 52, 70)
-	local INK = Color3.fromRGB(24, 36, 50)
-	local ICY_INK = Color3.fromRGB(174, 214, 236)
+	local ICE = Color3.fromRGB(206, 224, 238)
+	local FROST = Color3.fromRGB(118, 148, 174)
+	local SLATE = Color3.fromRGB(44, 60, 78)
+	local DEEP = Color3.fromRGB(22, 32, 44)
+	local INK = Color3.fromRGB(18, 28, 40)
+	local ICY_INK = Color3.fromRGB(166, 204, 228)
 
 	local function Mix(A, B, T)
 		return A:Lerp(B, math.clamp(T, 0, 1))
@@ -742,35 +742,91 @@ do
 		ReplaceLogo(Object)
 	end
 
-	-- Snow drift along an edge -------------------------------------------
-	local function CreateSnowDrift(Parent, YOffset, ZIndex)
-		local Drift = Instance.new("Frame")
-		Drift.Name = "SnowDrift"
-		Drift.BackgroundTransparency = 1
-		Drift.BorderSizePixel = 0
-		Drift.Active = false
-		Drift.Interactable = false
-		Drift.Size = UDim2.new(1, 0, 0, 16)
-		Drift.Position = UDim2.new(0, 0, 0, YOffset)
-		Drift.ZIndex = ZIndex
-		Drift.Parent = Parent
+	-- Settled snow -------------------------------------------------------
+	local function CreateSnowCap(Parent, ZIndex)
+		local Cap = Instance.new("Frame")
+		Cap.Name = "SnowCap"
+		Cap.BackgroundTransparency = 1
+		Cap.BorderSizePixel = 0
+		Cap.Active = false
+		Cap.Interactable = false
+		Cap.Size = UDim2.new(1, 0, 0, 14)
+		Cap.Position = UDim2.new(0, 0, 0, 0)
+		Cap.ZIndex = ZIndex
+		Cap.Parent = Parent
 
-		for Index = 0, 6 do
-			local Puff = Instance.new("Frame")
-			Puff.Name = "Puff"
-			Puff.AnchorPoint = Vector2.new(0.5, 0.5)
-			Puff.Position = UDim2.new(Index / 6, (Index % 2 == 0) and -8 or 8, 0.5, 0)
-			Puff.Size = UDim2.fromOffset(46 + (Index % 3) * 16, 10)
-			Puff.BackgroundColor3 = ICE
-			Puff.BackgroundTransparency = 0.6 + (Index % 2) * 0.15
-			Puff.BorderSizePixel = 0
-			Puff.ZIndex = ZIndex
-			Puff.Parent = Drift
+		-- Soft rim that melts into the window
+		local Rim = Instance.new("Frame")
+		Rim.Name = "Rim"
+		Rim.Size = UDim2.new(1, 0, 0, 5)
+		Rim.BackgroundColor3 = SNOW
+		Rim.BackgroundTransparency = 0.05
+		Rim.BorderSizePixel = 0
+		Rim.ZIndex = ZIndex
+		Rim.Parent = Cap
 
-			local Corner = Instance.new("UICorner")
-			Corner.CornerRadius = UDim.new(1, 0)
-			Corner.Parent = Puff
+		local RimCorner = Instance.new("UICorner")
+		RimCorner.CornerRadius = UDim.new(0, 6)
+		RimCorner.Parent = Rim
+
+		local Fade = Instance.new("UIGradient")
+		Fade.Rotation = 90
+		Fade.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.05),
+			NumberSequenceKeypoint.new(0.6, 0.4),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		Fade.Parent = Rim
+
+		local Bumps = Instance.new("Frame")
+		Bumps.Name = "Bumps"
+		Bumps.BackgroundTransparency = 1
+		Bumps.BorderSizePixel = 0
+		Bumps.Size = UDim2.fromScale(1, 1)
+		Bumps.ZIndex = ZIndex + 1
+		Bumps.Parent = Cap
+
+		local LastWidth = 0
+
+		local function Rebuild()
+			local Width = Cap.AbsoluteSize.X
+			if Width <= 1 or math.abs(Width - LastWidth) < 6 then
+				return
+			end
+			LastWidth = Width
+
+			for _, Child in ipairs(Bumps:GetChildren()) do
+				if Child:IsA("Frame") then
+					Child:Destroy()
+				end
+			end
+
+			local Count = math.clamp(math.floor(Width / 17), 14, 120)
+			local Spacing = Width / Count
+
+			for Index = 0, Count do
+				local Bump = Instance.new("Frame")
+				Bump.Name = "Bump"
+				Bump.AnchorPoint = Vector2.new(0.5, 0.5)
+				Bump.Position = UDim2.new(0, Index * Spacing + (math.random() - 0.5) * Spacing * 0.7, 0, -1.5 + math.random() * 1.5)
+				Bump.Size = UDim2.fromOffset(
+					Spacing * (1.55 + math.random() * 0.55),
+					5 + math.random() * 4
+				)
+				Bump.BackgroundColor3 = SNOW
+				Bump.BackgroundTransparency = 0.03 + math.random() * 0.09
+				Bump.BorderSizePixel = 0
+				Bump.ZIndex = ZIndex + 1
+				Bump.Parent = Bumps
+
+				local Corner = Instance.new("UICorner")
+				Corner.CornerRadius = UDim.new(1, 0)
+				Corner.Parent = Bump
+			end
 		end
+
+		Rebuild()
+		Cap:GetPropertyChangedSignal("AbsoluteSize"):Connect(Rebuild)
 	end
 
 	-- Initial pass -------------------------------------------------------
@@ -780,65 +836,6 @@ do
 
 	ScreenGui.DescendantAdded:Connect(function(Object)
 		task.defer(Process, Object)
-	end)
-
-	-- Falling snow -------------------------------------------------------
-	local SnowLayer = Instance.new("Frame")
-	SnowLayer.Name = "ChristmasSnow"
-	SnowLayer.BackgroundTransparency = 1
-	SnowLayer.BorderSizePixel = 0
-	SnowLayer.Active = false
-	SnowLayer.Interactable = false
-	SnowLayer.Size = UDim2.fromScale(1, 1)
-	SnowLayer.ZIndex = 45
-	SnowLayer.Parent = ScreenGui
-
-	local Flakes = {}
-
-	for Index = 1, 40 do
-		local Flake = Instance.new("Frame")
-		Flake.Name = "Snowflake"
-		Flake.AnchorPoint = Vector2.new(0.5, 0.5)
-		Flake.BackgroundColor3 = SNOW
-		Flake.BackgroundTransparency = 0.15 + math.random() * 0.35
-		Flake.BorderSizePixel = 0
-		Flake.Size = UDim2.fromOffset(math.random(2, 6), math.random(2, 6))
-		Flake.ZIndex = 45
-		Flake.Parent = SnowLayer
-
-		local Corner = Instance.new("UICorner")
-		Corner.CornerRadius = UDim.new(1, 0)
-		Corner.Parent = Flake
-
-		Flakes[Index] = {
-			Frame = Flake,
-			X = math.random(),
-			Y = math.random(),
-			Speed = math.random(18, 52),
-			Sway = math.random(6, 26),
-			Phase = math.random() * math.pi * 2,
-			SwaySpeed = 0.6 + math.random() * 1.4,
-		}
-	end
-
-	local Elapsed = 0
-	wax.shared.RunService.RenderStepped:Connect(function(Delta)
-		Elapsed += Delta
-		local Size = SnowLayer.AbsoluteSize
-		if Size.X <= 0 or Size.Y <= 0 then
-			return
-		end
-
-		for _, Data in ipairs(Flakes) do
-			Data.Y += (Data.Speed * Delta) / Size.Y
-			if Data.Y > 1.06 then
-				Data.Y = -0.06
-				Data.X = math.random()
-			end
-
-			local Sway = math.sin(Elapsed * Data.SwaySpeed + Data.Phase) * Data.Sway
-			Data.Frame.Position = UDim2.fromOffset(Data.X * Size.X + Sway, Data.Y * Size.Y)
-		end
 	end)
 
 	-- Window decorations -------------------------------------------------
@@ -880,7 +877,7 @@ do
 			end
 		end
 
-		CreateSnowDrift(MainFrame, -8, 30)
+		CreateSnowCap(MainFrame, 60)
 	end
 end
 
@@ -14910,7 +14907,7 @@ local function SetupDialog(
 
 		-- Action buttons use snow white / icy blue with navy ink
 		local IsPrimary = ButtonType == "Primary"
-		local ButtonBackground = IsPrimary and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(74, 102, 130)
+		local ButtonBackground = IsPrimary and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(56, 74, 94)
 		local ButtonTextColor = IsPrimary and Color3.fromRGB(24, 36, 50) or Color3.fromRGB(214, 232, 244)
 		local ButtonStrokeColor = IsPrimary and Color3.fromRGB(214, 232, 244) or Color3.fromRGB(110, 142, 170)
 
@@ -15968,7 +15965,7 @@ return function(Props: {
 	local function CreateToggle(Parent: GuiObject, Filter: CallFilter)
 		local Toggle = Interface.New("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			BackgroundColor3 = if Filter.Enabled then Color3.fromRGB(198, 224, 240) else Color3.fromRGB(56, 78, 100),
+			BackgroundColor3 = if Filter.Enabled then Color3.fromRGB(186, 214, 232) else Color3.fromRGB(40, 54, 70),
 			Position = UDim2.new(1, -38, 0.5, 0),
 			Size = UDim2.fromOffset(32, 18),
 			Text = "",
@@ -15991,7 +15988,7 @@ return function(Props: {
 			Props.Manager:SetEnabled(Filter.Id, Enabled)
 			wax.shared.TweenService
 				:Create(Toggle, Constants.DefaultTweenInfo, {
-					BackgroundColor3 = if Enabled then Color3.fromRGB(198, 224, 240) else Color3.fromRGB(56, 78, 100),
+					BackgroundColor3 = if Enabled then Color3.fromRGB(186, 214, 232) else Color3.fromRGB(40, 54, 70),
 				})
 				:Play()
 			local KnobTween = wax.shared.TweenService:Create(Knob, Constants.DefaultTweenInfo, {
@@ -16181,8 +16178,8 @@ return function(props: {
 		Parent = props.Parent,
 	})
 
-	local ToggleOnColor = Color3.fromRGB(198, 224, 240)
-	local ToggleOffColor = Color3.fromRGB(56, 78, 100)
+	local ToggleOnColor = Color3.fromRGB(186, 214, 232)
+	local ToggleOffColor = Color3.fromRGB(40, 54, 70)
 	local ToggleKnobOnColor = Color3.fromRGB(26, 40, 56)
 	local ToggleKnobOffColor = Color3.fromRGB(188, 214, 232)
 
@@ -22915,7 +22912,7 @@ return function(props: {
 	--// Resizer \\--
 	local RemoteListLine = Interface.New("Frame", {
 		AnchorPoint = Vector2.yAxis,
-		BackgroundColor3 = Color3.fromRGB(150, 183, 206),
+		BackgroundColor3 = Color3.fromRGB(118, 148, 174),
 		BackgroundTransparency = 0.45,
 		Position = UDim2.new(0, 240, 1, 0),
 		Size = UDim2.new(0, 2, 1, -36),
@@ -23661,7 +23658,7 @@ return function(props: {
 	function Calls:CreatePaginationEllipsis(Order: number, Visible: boolean)
 		local Ellipsis = {
 			Ellipsis = Interface.New("TextBox", {
-				BackgroundColor3 = Color3.fromRGB(58, 80, 102),
+				BackgroundColor3 = Color3.fromRGB(40, 54, 70),
 				Size = UDim2.fromScale(1, 1),
 				SizeConstraint = Enum.SizeConstraint.RelativeYY,
 				LayoutOrder = Order,
@@ -23719,7 +23716,7 @@ return function(props: {
 	function Calls:CreatePaginationButton(Order: number, Active: boolean, Visible: boolean)
 		local ButtonData = {
 			Button = Interface.New("TextButton", {
-				BackgroundColor3 = Active and Color3.fromRGB(222, 238, 248) or Color3.fromRGB(58, 80, 102),
+				BackgroundColor3 = Active and Color3.fromRGB(202, 224, 240) or Color3.fromRGB(40, 54, 70),
 				Size = UDim2.fromScale(1, 1),
 				SizeConstraint = Enum.SizeConstraint.RelativeYY,
 				Text = tostring(1),
@@ -23735,7 +23732,7 @@ return function(props: {
 		}
 
 		function ButtonData:SetActive(Active: boolean)
-			self.Button.BackgroundColor3 = Active and Color3.fromRGB(222, 238, 248) or Color3.fromRGB(58, 80, 102)
+			self.Button.BackgroundColor3 = Active and Color3.fromRGB(202, 224, 240) or Color3.fromRGB(40, 54, 70)
 			self.Button.TextColor3 = Active and Color3.fromRGB(24, 36, 50) or Color3.fromRGB(192, 216, 234)
 		end
 
