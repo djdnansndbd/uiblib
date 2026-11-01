@@ -11,7 +11,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 
@@ -32,8 +31,9 @@ local State = {
 
 	AutoEgg = false,
 	EggSpot = "30m Visit Egg",
-	EggKey = "T",
-	EggDelay = 0.5,
+	EggId = "30M Visits",
+	EggCount = 8,
+	EggSequence = 0,
 	EggReach = 6,
 
 	AutoRebirth = false,
@@ -51,20 +51,24 @@ local State = {
 }
 
 local EggSpots = {
-	["30m Visit Egg"] = CFrame.new(
-		-51.529285,
-		-513.471252,
-		-1943.992920,
-		0.872108,
-		0,
-		-0.489313,
-		0,
-		1,
-		0,
-		0.489313,
-		0,
-		0.872108
-	),
+	["30m Visit Egg"] = {
+		CFrame = CFrame.new(
+			-51.529285,
+			-513.471252,
+			-1943.992920,
+			0.872108,
+			0,
+			-0.489313,
+			0,
+			1,
+			0,
+			0.489313,
+			0,
+			0.872108
+		),
+		Egg = "30M Visits",
+		Count = 8,
+	},
 }
 
 -- Helpers -------------------------------------------------------------
@@ -113,11 +117,6 @@ local function toId(Name)
 	return (tostring(Name):gsub("%s+", ""))
 end
 
-local function parseKey(Text)
-	local Name = tostring(Text or ""):upper():gsub("%s+", "")
-	return Enum.KeyCode[Name] or Enum.KeyCode.T
-end
-
 local function parseArgs(Text)
 	Text = tostring(Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
 	if Text == "" then
@@ -163,17 +162,15 @@ local function getRoot()
 	return Character and Character:FindFirstChild("HumanoidRootPart")
 end
 
-local function pressKey(Key)
-	if keypress and keyrelease then
-		keypress(Key)
-		task.wait(0.03)
-		keyrelease(Key)
-		return
+local function activeEggSpot()
+	local Spot = EggSpots[State.EggSpot]
+	if not Spot then
+		return nil
 	end
-
-	VirtualInputManager:SendKeyEvent(true, Key, false, game)
-	task.wait(0.03)
-	VirtualInputManager:SendKeyEvent(false, Key, false, game)
+	if Spot.CFrame then
+		return Spot
+	end
+	return { CFrame = Spot, Egg = State.EggId, Count = State.EggCount }
 end
 
 local function readStats()
@@ -349,6 +346,27 @@ local EggSection = EggTab:Section("Auto Open Egg")
 
 local EggDropdown
 local EggStatus
+local EggIdBox
+local EggCountSlider
+
+local function eggStatusText()
+	local Spot = activeEggSpot()
+	local Egg = Spot and (Spot.Egg or State.EggId) or State.EggId
+	local Count = Spot and (Spot.Count or State.EggCount) or State.EggCount
+	return string.format(
+		"Spot: %s   |   egg: %s   |   count: %d   |   seq: %d",
+		State.EggSpot ~= "" and State.EggSpot or "none",
+		Egg,
+		Count,
+		State.EggSequence
+	)
+end
+
+local function refreshEggStatus()
+	if EggStatus then
+		EggStatus:Set(eggStatusText())
+	end
+end
 
 local function refreshEggOptions()
 	local Names = {}
@@ -365,51 +383,65 @@ local function refreshEggOptions()
 		EggDropdown:Set(State.EggSpot)
 	end
 
-	if EggStatus then
-		EggStatus:Set("Spot: " .. (State.EggSpot ~= "" and State.EggSpot or "none") .. "  |  distance guard: 6")
-	end
+	refreshEggStatus()
 end
 
-EggDropdown = EggSection:Dropdown("Egg spot", "Where to stand while opening.", { "30m Visit Egg" }, "30m Visit Egg", function(Value)
+EggDropdown = EggSection:Dropdown("Egg spot", "Where to stand while hatching.", { "30m Visit Egg" }, "30m Visit Egg", function(Value)
 	State.EggSpot = Value
-	if EggStatus then
-		EggStatus:Set("Spot: " .. tostring(Value) .. "  |  distance guard: 6")
+
+	local Spot = EggSpots[Value]
+	if type(Spot) == "table" then
+		State.EggId = Spot.Egg or State.EggId
+		State.EggCount = Spot.Count or State.EggCount
+		if EggIdBox then
+			EggIdBox:Set(State.EggId)
+		end
+		if EggCountSlider then
+			EggCountSlider:Set(State.EggCount)
+		end
 	end
+
+	refreshEggStatus()
 end, "eggSpot")
 
 EggSection:Toggle(
 	"Auto Open Egg",
-	"Teleports to the spot and spams the key until you turn it off.",
+	"Teleports to the egg, then fires EggHatchRequested every 0.1s with a climbing Seq.",
 	false,
 	function(Enabled)
 		State.AutoEgg = Enabled
 		if Enabled then
-			local Spot = EggSpots[State.EggSpot]
+			local Spot = activeEggSpot()
 			if not Spot then
 				notify("Eggs", "No spot saved yet - press 'Save current position'.", "error")
 				return
 			end
+
+			State.EggSequence = 0
 			pcall(function()
 				if player.Character then
-					player.Character:PivotTo(Spot)
+					player.Character:PivotTo(Spot.CFrame)
 				end
 			end)
+			refreshEggStatus()
 		end
 	end,
 	"autoOpen30mEgg"
 )
 
-EggSection:Textbox("Key to press", "T", function(Value)
-	State.EggKey = Value
-end, "eggKey")
+EggIdBox = EggSection:Textbox("Egg id (remote value)", "30M Visits", function(Value)
+	State.EggId = Value
+	refreshEggStatus()
+end, "eggId")
 
-EggSection:Slider("Press delay (s)", 1, 40, 5, function(Value)
-	State.EggDelay = math.max(0.1, Value / 10)
-end, "eggDelay")
+EggCountSlider = EggSection:Slider("Hatch count", 1, 50, 8, function(Value)
+	State.EggCount = math.max(1, math.floor(Value))
+	refreshEggStatus()
+end, "eggCount")
 
 local SpotNameBox = EggSection:Textbox("Spot name", "", function() end, "eggSpotName")
 
-EggSection:Button("Save current position", "Stores your current position under the name above.", function()
+EggSection:Button("Save current position", "Stores your position + egg settings under the name above.", function()
 	local Name = SpotNameBox:Get()
 	if type(Name) ~= "string" or Name:gsub("%s+", "") == "" then
 		notify("Eggs", "Type a spot name first.", "error")
@@ -422,7 +454,11 @@ EggSection:Button("Save current position", "Stores your current position under t
 		return
 	end
 
-	EggSpots[Name] = Character:GetPivot()
+	EggSpots[Name] = {
+		CFrame = Character:GetPivot(),
+		Egg = State.EggId,
+		Count = State.EggCount,
+	}
 	State.EggSpot = Name
 	refreshEggOptions()
 	notify("Eggs", "Saved spot: " .. Name, "success")
@@ -441,7 +477,7 @@ EggSection:Button("Delete selected spot", "Removes the spot currently selected a
 	end
 end)
 
-EggStatus = EggSection:Label("Spot: 30m Visit Egg")
+EggStatus = EggSection:Label("Spot: 30m Visit Egg   |   egg: 30M Visits   |   count: 8   |   seq: 0")
 
 -- Rebirth / remote runner ---------------------------------------------
 local RebirthTab = window:Tab("Rebirth")
@@ -691,24 +727,41 @@ task.spawn(function()
 	end
 end)
 
--- Auto egg
+-- Auto egg: fires EggHatchRequested every 0.1s, Seq climbs like Auto Tap
 task.spawn(function()
+	local EggRemote
+
 	while true do
 		if State.AutoEgg then
-			local Spot = EggSpots[State.EggSpot]
+			local Spot = activeEggSpot()
 			local Root = getRoot()
 
 			if Spot and Root and player.Character then
-				if (Root.Position - Spot.Position).Magnitude > State.EggReach then
+				if (Root.Position - Spot.CFrame.Position).Magnitude > State.EggReach then
 					pcall(function()
-						player.Character:PivotTo(Spot)
+						player.Character:PivotTo(Spot.CFrame)
 					end)
 					task.wait(0.12)
 				end
-				pcall(pressKey, parseKey(State.EggKey))
+
+				if not (EggRemote and EggRemote.Parent) then
+					EggRemote = resolve("RemoteServices.EggService.RE.EggHatchRequested")
+				end
+
+				if EggRemote then
+					State.EggSequence += 1
+					pcall(function()
+						EggRemote:FireServer({
+							Egg = Spot.Egg or State.EggId,
+							Auto = false,
+							Seq = State.EggSequence,
+							Count = Spot.Count or State.EggCount,
+						})
+					end)
+				end
 			end
 
-			task.wait(math.max(0.1, State.EggDelay))
+			task.wait(0.1)
 		else
 			task.wait(0.1)
 		end
@@ -757,6 +810,7 @@ task.spawn(function()
 		end
 
 		TapLabel:Set("Taps sent: " .. State.TapsSent .. "   |   CPS: " .. State.TapCPS)
+		refreshEggStatus()
 
 		if State.LogRemotes then
 			local Tail = {}
